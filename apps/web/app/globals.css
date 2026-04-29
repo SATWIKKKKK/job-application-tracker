@@ -8,9 +8,23 @@
 
 body {
   background: #f8f9ff;
-  color: #0b1c30;
+  color: #191c20;
 }
 
 .focus-ring {
   @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #003593 0%, #0049c5 100%);
+}
+
+.shadow-ambient {
+  box-shadow:
+    0 4px 20px rgba(0, 73, 197, 0.04),
+    0 10px 40px rgba(25, 28, 32, 0.06);
+}
+
+.text-balance {
+  text-wrap: balance;
 }

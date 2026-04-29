@@ -1,40 +1,72 @@
-import { CheckCircle2, Cable, Puzzle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Puzzle, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import { Footer, NavBar } from '../../components/site-chrome';
 
 const steps = [
-  [Cable, 'Connect Your Sheet', 'Sign in with Google and grant access to Google Sheets. We create a dedicated JobTrackr sheet in your Drive.'],
-  [Puzzle, 'Install the Extension', 'Add our Chrome extension from the Web Store. It works silently in the background on 20+ job portals.'],
-  [CheckCircle2, 'Apply and Watch It Log', 'Apply to any job normally. The application details appear in your sheet within seconds.'],
+  {
+    icon: Table2,
+    title: 'Connect Your Sheet',
+    text: 'Link your existing Google Sheet or let us create a perfectly formatted tracking template for you instantly.',
+    tone: 'bg-primary-fixed text-primary',
+  },
+  {
+    icon: Puzzle,
+    title: 'Install the Extension',
+    text: 'Add our lightweight browser plugin. It sits quietly in the background until you find a job you love.',
+    tone: 'bg-secondary-fixed text-secondary',
+  },
+  {
+    icon: CheckCircle2,
+    title: 'Apply & Watch It Log',
+    text: "Click 'Save Job' on any supported career site. We automatically extract details and log them to your sheet.",
+    tone: 'bg-tertiary-fixed text-tertiary',
+  },
 ] as const;
 
 export default function HowItWorksPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-surface-container-low">
+    <div className="flex min-h-screen flex-col bg-background">
       <NavBar active="How it Works" />
-      <main className="mx-auto flex w-full max-w-[1500px] flex-1 flex-col items-center px-8 py-52 text-center">
-        <h1 className="font-headline text-5xl font-semibold">Up and running in 3 minutes</h1>
-        <p className="mt-8 max-w-3xl text-2xl leading-9 text-on-surface-variant">
-          Get your automated job application tracker set up instantly. No complex configuration required.
-        </p>
-        <div className="relative mt-24 grid w-full grid-cols-1 gap-12 md:grid-cols-3">
-          <div className="absolute left-[16%] right-[16%] top-16 hidden h-px bg-outline-variant md:block" />
-          {steps.map(([Icon, title, text], index) => (
-            <div className="relative flex flex-col items-center" key={title}>
-              <div className="relative z-10 flex h-32 w-32 items-center justify-center rounded-full border border-outline-variant bg-white text-primary">
-                <Icon size={42} />
-                <span className="absolute -right-2 -top-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary font-bold text-white">
-                  {index + 1}
-                </span>
-              </div>
-              <h2 className="mt-10 font-headline text-3xl font-bold">{title}</h2>
-              <p className="mt-6 max-w-md text-xl leading-8 text-on-surface-variant">{text}</p>
+      <main className="flex min-h-screen flex-col justify-center px-6 pb-24 pt-32 md:px-8">
+        <div className="relative mx-auto w-full max-w-screen-xl">
+          <div className="mx-auto mb-16 max-w-2xl text-center md:mb-20">
+            <h1 className="font-display text-4xl font-bold tracking-[-0.03em] text-on-background md:text-5xl">
+              Up and running in 3 minutes
+            </h1>
+            <p className="mt-6 font-body text-base leading-7 text-on-surface-variant md:text-lg">
+              No complicated setups. Just connect, install, and let JobTrackr handle the rest while you focus on landing the perfect role.
+            </p>
+          </div>
+
+          <div className="relative w-full">
+            <div className="absolute left-[15%] right-[15%] top-[120px] z-0 hidden h-px bg-outline-variant/30 lg:block" />
+            <div className="relative z-10 grid grid-cols-1 gap-10 lg:grid-cols-3">
+              {steps.map((step, index) => (
+                <div className={`group flex flex-col items-center ${index === 1 ? 'lg:mt-12' : ''}`} key={step.title}>
+                  <div className="shadow-ambient relative flex w-full max-w-[320px] flex-col items-center overflow-hidden rounded-lg bg-surface-container-lowest p-10 transition-transform duration-300 hover:-translate-y-2">
+                    <div className="pointer-events-none absolute -right-4 -top-4 select-none font-display text-8xl font-bold text-surface-container-low/60 transition-colors group-hover:text-surface-container-high/60">
+                      {index + 1}
+                    </div>
+                    <div className={`relative z-10 mb-8 flex h-20 w-20 items-center justify-center rounded-full ${step.tone}`}>
+                      <step.icon className="h-9 w-9" />
+                    </div>
+                    <h2 className="relative z-10 mb-4 text-center font-display text-xl font-bold text-on-background">{step.title}</h2>
+                    <p className="relative z-10 text-center font-body text-sm leading-6 text-on-surface-variant">{step.text}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div className="mt-16 text-center md:mt-20">
+            <Link
+              href="/auth/signin"
+              className="hero-gradient mx-auto inline-flex items-center gap-2 rounded-full px-8 py-4 font-body font-semibold text-on-primary shadow-ambient transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
+            >
+              Start Tracking Now <ArrowRight className="h-5 w-5" />
+            </Link>
+          </div>
         </div>
-        <Link href="/auth/signin" className="mt-24 rounded-lg bg-primary px-10 py-4 font-bold tracking-wide text-white">
-          Start Your Free Trial
-        </Link>
       </main>
       <Footer />
     </div>
