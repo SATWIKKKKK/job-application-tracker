@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JobTrackr</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <div class="brand">JobTrackr</div>
+        <span id="status" class="pill">Checking</span>
+      </header>
+
+      <section class="card">
+        <div>
+          <h1>Auto-logging</h1>
+          <p>Capture applications from supported portals.</p>
+        </div>
+        <label class="switch">
+          <input id="autoLogging" type="checkbox" />
+          <span></span>
+        </label>
+      </section>
+
+      <section class="card muted">
+        <h2>Last logged</h2>
+        <p id="lastLogged">No applications logged yet.</p>
+      </section>
+
+      <label class="token-label" for="jwt">Extension JWT</label>
+      <textarea id="jwt" placeholder="Paste your JobTrackr JWT for local testing"></textarea>
+      <button id="save">Save JWT</button>
+
+      <a class="dashboard" href="http://localhost:3000/dashboard" target="_blank">Open dashboard</a>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "JobTrackr",
+  "description": "Auto-log job applications to JobTrackr.",
+  "version": "0.1.0",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.naukri.com/*",
+    "https://*.internshala.com/*",
+    "https://*.unstop.com/*",
+    "https://*.wellfound.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.shine.com/*",
+    "https://*.hirect.in/*",
+    "https://*.cutshort.io/*",
+    "https://*.foundit.in/*",
+    "https://*.workindia.in/*",
+    "https://*.apna.co/*",
+    "https://*.freshersworld.com/*",
+    "https://*.timesjobs.com/*",
+    "https://*.iimjobs.com/*",
+    "https://*.hirist.tech/*",
+    "https://*.monsterindia.com/*",
+    "https://*.remoteok.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*",
+        "https://*.naukri.com/*",
+        "https://*.internshala.com/*",
+        "https://*.unstop.com/*",
+        "https://*.wellfound.com/*",
+        "https://*.glassdoor.com/*",
+        "https://*.shine.com/*",
+        "https://*.hirect.in/*",
+        "https://*.cutshort.io/*",
+        "https://*.foundit.in/*",
+        "https://*.workindia.in/*",
+        "https://*.apna.co/*",
+        "https://*.freshersworld.com/*",
+        "https://*.timesjobs.com/*",
+        "https://*.iimjobs.com/*",
+        "https://*.hirist.tech/*",
+        "https://*.monsterindia.com/*",
+        "https://*.remoteok.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JobTrackr"
+  }
+}
