@@ -50,3 +50,14 @@ export function weeklyDigestEmail(apps: JobApplication[]) {
     `,
   );
 }
+
+export function verificationOtpEmail(otp: string) {
+  return shell(
+    'Verify Your JobTrackr Account',
+    `
+      <p style="font-size:16px;line-height:24px">Use this one-time code to verify your email address.</p>
+      <div style="font-size:32px;letter-spacing:8px;font-weight:800;color:#0049C5;background:#F8F9FF;border:1px solid #C2C6D8;border-radius:12px;padding:18px;text-align:center">${otp}</div>
+      <p style="font-size:13px;color:#424656;margin-top:18px">This code expires in 10 minutes.</p>
+    `,
+  );
+}

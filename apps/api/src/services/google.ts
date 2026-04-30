@@ -96,3 +96,35 @@ export async function appendApplicationRow(userId: string, row: string[]) {
     requestBody: { values: [row] },
   });
 }
+
+export async function updateApplicationStatusRow(
+  userId: string,
+  app: { job_title: string; company: string; job_url: string | null; status: string },
+) {
+  const user = await query<{ google_sheet_id: string | null }>(
+    'select google_sheet_id from users where id = $1',
+    [userId],
+  );
+  const spreadsheetId = user.rows[0]?.google_sheet_id;
+  if (!spreadsheetId) throw new Error('missing_google_sheet_id');
+
+  const sheets = await getAuthedSheetsClient(userId);
+  const values = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'Applications!A2:G',
+  });
+  const rows = values.data.values ?? [];
+  const index = rows.findIndex((row) => {
+    const [title, company, , , url] = row;
+    return title === app.job_title && company === app.company && (!app.job_url || url === app.job_url);
+  });
+
+  if (index < 0) throw new Error('sheet_row_not_found');
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `Applications!G${index + 2}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[app.status]] },
+  });
+}

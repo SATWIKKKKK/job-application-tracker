@@ -1,4 +1,5 @@
 import { BarChart3, Globe2, Mail, Puzzle, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import { Footer, NavBar } from '../../components/site-chrome';
 
 const featureImage =
@@ -19,7 +20,7 @@ export default function FeaturesPage() {
         </div>
 
         <div className="grid auto-rows-[220px] grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
-          <div className="shadow-ambient group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-8 md:col-span-2">
+          <Link href="/auth/signin" className="shadow-ambient group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-8 transition-colors hover:bg-primary-fixed/30 md:col-span-2">
             <div className="relative z-10">
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Puzzle className="h-6 w-6" />
@@ -35,9 +36,9 @@ export default function FeaturesPage() {
               className="absolute -bottom-6 -right-8 h-64 w-2/3 rounded-xl border border-outline-variant/20 bg-cover bg-center drop-shadow-2xl transition-transform duration-500 group-hover:-translate-x-2 group-hover:-translate-y-2"
               style={{ backgroundImage: `url(${featureImage})` }}
             />
-          </div>
+          </Link>
 
-          <div className="group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low p-8">
+          <Link href="/dashboard/setup" className="group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low p-8 transition-colors hover:bg-secondary-fixed/60">
             <div className="relative z-10">
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary">
                 <RefreshCw className="h-6 w-6" />
@@ -56,12 +57,12 @@ export default function FeaturesPage() {
                 <div className="h-2 w-2/3 rounded-full bg-surface-dim" />
               </div>
             </div>
-          </div>
+          </Link>
 
           <SmallFeature icon={<Globe2 />} title="20+ Portals" text="Works seamlessly with LinkedIn, Indeed, Greenhouse, and more." tone="tertiary" />
           <SmallFeature icon={<Mail />} title="Email Confirmations" text="Automatically parse application receipts from your inbox." tone="primary" />
 
-          <div className="col-span-1 row-span-1 flex items-center justify-between overflow-hidden rounded-xl bg-surface-container-low p-6 md:col-span-2">
+          <Link href="/dashboard" className="col-span-1 row-span-1 flex items-center justify-between overflow-hidden rounded-xl bg-surface-container-low p-6 transition-colors hover:bg-primary-fixed/40 md:col-span-2">
             <div className="relative z-10 w-1/2">
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-secondary/10 text-secondary">
                 <BarChart3 className="h-5 w-5" />
@@ -74,7 +75,7 @@ export default function FeaturesPage() {
               <div className="h-[70%] w-8 rounded-t-md bg-primary-fixed-dim" />
               <div className="h-full w-8 rounded-t-md bg-primary" />
             </div>
-          </div>
+          </Link>
         </div>
       </main>
       <Footer />
@@ -94,12 +95,12 @@ function SmallFeature({
   tone: 'primary' | 'tertiary';
 }) {
   return (
-    <div className="shadow-ambient col-span-1 row-span-1 flex flex-col justify-center rounded-xl bg-surface-container-lowest p-6 transition-shadow duration-300 hover:shadow-lg">
+    <Link href={tone === 'primary' ? '/auth/signin' : '/sites'} className="shadow-ambient col-span-1 row-span-1 flex flex-col justify-center rounded-xl bg-surface-container-lowest p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-primary-fixed/20 hover:shadow-lg">
       <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-full ${tone === 'primary' ? 'bg-primary/10 text-primary' : 'bg-tertiary-container/10 text-tertiary'}`}>
         {icon}
       </div>
       <h3 className="mb-2 font-headline text-xl font-bold tracking-tight text-on-surface">{title}</h3>
       <p className="font-body text-sm leading-6 text-on-surface-variant">{text}</p>
-    </div>
+    </Link>
   );
 }

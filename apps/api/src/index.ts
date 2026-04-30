@@ -9,12 +9,25 @@ import { meRouter } from './routes/me.js';
 import { paymentsRouter } from './routes/payments.js';
 import { sheetsRouter } from './routes/sheets.js';
 import { startWeeklyDigestJob } from './jobs/weeklyDigest.js';
+import { ensureDatabaseShape } from './db/schema.js';
 
 const app = express();
 
 app.use(
   cors({
-    origin: config.webUrl,
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      const allowed = new Set([
+        config.webUrl,
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3004',
+        'http://localhost:3005',
+      ]);
+      callback(null, allowed.has(origin));
+    },
     credentials: true,
   }),
 );
@@ -40,6 +53,7 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   return res.status(500).json({ message: 'internal_error' });
 });
 
+await ensureDatabaseShape();
 startWeeklyDigestJob();
 
 app.listen(config.port, () => {

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Cloud, FileText, LayoutDashboard, LogOut, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
+import { Cloud, FileText, LayoutDashboard, LogOut, Puzzle, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
 import type { User } from '@jobtrackr/types';
 import { DashboardTopBar } from './dashboard-actions';
 
@@ -7,6 +7,7 @@ const nav = [
   [LayoutDashboard, 'Dashboard', '/dashboard'],
   [Sparkles, 'Market Insights', '/dashboard?panel=insights'],
   [Workflow, 'Pipeline Analytics', '/dashboard?panel=pipeline'],
+  [Puzzle, 'Install Extension', '/dashboard/portals'],
   [Users, 'Talent Pool', '/dashboard?panel=talent'],
   [FileText, 'Strategic Reports', '/dashboard?panel=reports'],
 ] as const;

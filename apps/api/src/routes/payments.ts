@@ -34,7 +34,7 @@ paymentsRouter.post('/create-order', async (req, res, next) => {
     const order = await razorpay.orders.create({
       amount: amountMap[plan],
       currency: 'INR',
-      receipt: `jobtrackr_${req.user!.id}_${Date.now()}`,
+      receipt: `jt_${Date.now()}`,
       notes: { plan, user_id: req.user!.id },
     });
     res.json({ order_id: order.id, amount: order.amount, plan });

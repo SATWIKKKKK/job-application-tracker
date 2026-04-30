@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { JobApplication } from '@jobtrackr/types';
 import { query } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
-import { appendApplicationRow } from '../services/google.js';
+import { appendApplicationRow, updateApplicationStatusRow } from '../services/google.js';
 import { sendEmail } from '../services/email.js';
 import { applicationConfirmedEmail } from '../templates/emails.js';
 
@@ -71,11 +71,15 @@ applicationsRouter.post('/log', async (req, res, next) => {
       console.warn('Sheet append skipped/failed:', error);
     }
 
-    await sendEmail(
-      user.rows[0].email,
-      `Application logged: ${app.job_title}`,
-      applicationConfirmedEmail(app),
-    );
+    try {
+      await sendEmail(
+        user.rows[0].email,
+        `Application logged: ${app.job_title}`,
+        applicationConfirmedEmail(app),
+      );
+    } catch (error) {
+      console.warn('Confirmation email skipped/failed:', error);
+    }
 
     return res.status(201).json({ application: app });
   } catch (error) {
@@ -108,5 +112,32 @@ applicationsRouter.get('/', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+applicationsRouter.patch('/:id/status', async (req, res, next) => {
+  try {
+    const { status } = z
+      .object({ status: z.enum(['Applied', 'Viewed', 'Shortlisted', 'Rejected']) })
+      .parse(req.body);
+    const updated = await query<JobApplication>(
+      `update applications
+       set status = $1
+       where id = $2 and user_id = $3
+       returning *`,
+      [status, req.params.id, req.user!.id],
+    );
+    const app = updated.rows[0];
+    if (!app) return res.status(404).json({ message: 'not_found' });
+
+    try {
+      await updateApplicationStatusRow(req.user!.id, app);
+    } catch (error) {
+      console.warn('Sheet status update skipped/failed:', error);
+    }
+
+    return res.json({ application: app });
+  } catch (error) {
+    return next(error);
   }
 });

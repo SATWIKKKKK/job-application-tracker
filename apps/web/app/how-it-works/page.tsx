@@ -43,7 +43,7 @@ export default function HowItWorksPage() {
             <div className="relative z-10 grid grid-cols-1 gap-10 lg:grid-cols-3">
               {steps.map((step, index) => (
                 <div className={`group flex flex-col items-center ${index === 1 ? 'lg:mt-12' : ''}`} key={step.title}>
-                  <div className="shadow-ambient relative flex w-full max-w-[320px] flex-col items-center overflow-hidden rounded-lg bg-surface-container-lowest p-10 transition-transform duration-300 hover:-translate-y-2">
+                  <Link href={index === 0 ? '/dashboard/setup' : index === 1 ? '/dashboard/portals' : '/sites'} className="shadow-ambient relative flex w-full max-w-[320px] flex-col items-center overflow-hidden rounded-lg bg-surface-container-lowest p-10 transition-all duration-300 hover:-translate-y-2 hover:bg-primary-fixed/20">
                     <div className="pointer-events-none absolute -right-4 -top-4 select-none font-display text-8xl font-bold text-surface-container-low/60 transition-colors group-hover:text-surface-container-high/60">
                       {index + 1}
                     </div>
@@ -52,7 +52,7 @@ export default function HowItWorksPage() {
                     </div>
                     <h2 className="relative z-10 mb-4 text-center font-display text-xl font-bold text-on-background">{step.title}</h2>
                     <p className="relative z-10 text-center font-body text-sm leading-6 text-on-surface-variant">{step.text}</p>
-                  </div>
+                  </Link>
                 </div>
               ))}
             </div>

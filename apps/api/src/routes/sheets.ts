@@ -11,6 +11,9 @@ sheetsRouter.post('/setup', async (req, res, next) => {
     const sheet = await createApplicationSheet(req.user!.id);
     res.json({ sheet_url: sheet.url, spreadsheet_id: sheet.spreadsheetId });
   } catch (error) {
+    if (error instanceof Error && error.message === 'missing_google_refresh_token') {
+      return res.status(409).json({ message: 'missing_google_refresh_token' });
+    }
     next(error);
   }
 });
@@ -39,6 +42,12 @@ sheetsRouter.post('/log', async (req, res, next) => {
     ]);
     res.json({ ok: true });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      ['missing_google_refresh_token', 'missing_google_sheet_id'].includes(error.message)
+    ) {
+      return res.status(409).json({ message: error.message });
+    }
     next(error);
   }
 });

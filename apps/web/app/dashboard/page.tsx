@@ -1,6 +1,7 @@
 import type { JobApplication, User } from '@jobtrackr/types';
 import { BriefcaseBusiness, Calendar, CheckCircle2, Clock, Code2, Download, FileText, Megaphone, Plus, RefreshCw, TrendingUp } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
+import { ApplicationsTable } from '../../components/applications-table';
 import { apiFetch } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -120,6 +121,8 @@ export default async function DashboardPage() {
           </section>
         </div>
       </div>
+
+      <ApplicationsTable applications={applications} />
     </DashboardShell>
   );
 }
