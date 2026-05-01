@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
@@ -12,7 +13,16 @@ type ScanStatus = {
   gmail_connected: boolean;
 };
 
+function getBrowserAuthHeaders() {
+  const token = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith('jt_token='))
+    ?.split('=')[1];
+  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
+}
+
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
+  const router = useRouter();
   const [gmailConnected, setGmailConnected] = useState(user.gmail_connected);
   const [sheetId, setSheetId] = useState(user.google_sheet_id);
   const [scanCompleted, setScanCompleted] = useState(user.initial_scan_completed);
@@ -25,7 +35,10 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   useEffect(() => {
     if (!isScanning || scanCompleted) return;
     const timer = window.setInterval(async () => {
-      const response = await fetch(`${API_URL}/api/applications/scan-status`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/applications/scan-status`, {
+        credentials: 'include',
+        headers: getBrowserAuthHeaders(),
+      });
       if (!response.ok) return;
       const status = (await response.json()) as ScanStatus;
       setGmailConnected(status.gmail_connected);
@@ -38,6 +51,20 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     }, 3000);
     return () => window.clearInterval(timer);
   }, [isScanning, scanCompleted]);
+
+  useEffect(() => {
+    if (!gmailConnected) return;
+    const timer = window.setInterval(() => {
+      void fetch(`${API_URL}/api/gmail/sync-recent`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getBrowserAuthHeaders(),
+      }).finally(() => {
+        router.refresh();
+      });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [gmailConnected, router]);
 
   const banner = useMemo(() => {
     if (!gmailConnected) {
@@ -60,7 +87,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     const response = await fetch(`${API_URL}/api/gmail/acknowledge-connected`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
     });
     if (!response.ok) return;
     setGmailConnected(true);
@@ -77,7 +104,10 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     setSheetError('');
     const sheetTab = window.open('', '_blank');
     try {
-      const response = await fetch(`${API_URL}/api/user/sheet-url`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/user/sheet-url`, {
+        credentials: 'include',
+        headers: getBrowserAuthHeaders(),
+      });
       const data = (await response.json()) as {
         sheet_id: string | null;
         sheet_url: string | null;

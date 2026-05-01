@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Lock } from 'lucide-react';
-import type { JobApplication, User } from '@jobtrackr/types';
+import type { JobApplication, User } from '../../../lib/types';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { apiFetch } from '../../../lib/api';
 import { SUPPORTED_PORTALS } from '../../../lib/portals';

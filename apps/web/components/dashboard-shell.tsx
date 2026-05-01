@@ -1,16 +1,11 @@
 import Link from 'next/link';
-import { Cloud, FileText, LayoutDashboard, ListChecks, LogOut, Puzzle, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
+import { Cloud, LayoutDashboard, ListChecks, LogOut } from 'lucide-react';
 import type { User } from '../lib/types';
 import { DashboardTopBar } from './dashboard-actions';
 
 const nav = [
   [LayoutDashboard, 'Dashboard', '/dashboard'],
   [ListChecks, 'Applications', '/dashboard/applications'],
-  [Sparkles, 'Market Insights', '/dashboard?panel=insights'],
-  [Workflow, 'Pipeline Analytics', '/dashboard?panel=pipeline'],
-  [Puzzle, 'Install Extension', '/dashboard/portals'],
-  [Users, 'Talent Pool', '/dashboard?panel=talent'],
-  [FileText, 'Strategic Reports', '/dashboard?panel=reports'],
 ] as const;
 
 export function DashboardShell({ user, children }: { user: User; children: React.ReactNode }) {
@@ -49,9 +44,6 @@ export function DashboardShell({ user, children }: { user: User; children: React
             className="flex w-full items-center justify-center gap-2 rounded-full bg-surface-container-high px-4 py-3 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-variant"
           >
             <Cloud className="h-4 w-4" /> System Status
-          </Link>
-          <Link href="/dashboard?panel=security" className="flex items-center gap-3 rounded-xl p-2 text-sm font-medium text-slate-500 transition-colors hover:text-blue-800">
-            <ShieldCheck className="h-5 w-5" /> Security
           </Link>
           <Link href="/auth/signin" className="flex items-center gap-3 rounded-xl p-2 text-sm font-medium text-slate-500 transition-colors hover:text-blue-800">
             <LogOut className="h-5 w-5" /> Log Out

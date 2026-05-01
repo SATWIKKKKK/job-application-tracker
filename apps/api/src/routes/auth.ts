@@ -142,9 +142,12 @@ authRouter.get('/google/callback', async (req, res, next) => {
       }
     })();
 
-    setAuthCookie(res, appUser);
+    const token = setAuthCookie(res, appUser);
     res.clearCookie(oauthReturnCookie);
-    res.redirect(`${redirectBaseUrl}/dashboard?oauth=google`);
+    const bridgeUrl = new URL('/auth/bridge', redirectBaseUrl);
+    bridgeUrl.searchParams.set('token', token);
+    bridgeUrl.searchParams.set('next', '/dashboard?oauth=google');
+    res.redirect(bridgeUrl.toString());
   } catch (error) {
     next(error);
   }
@@ -208,8 +211,8 @@ authRouter.post('/verify-otp', async (req, res, next) => {
        returning id, email, name`,
       [user.id],
     );
-    setAuthCookie(res, verified.rows[0]);
-    return res.json({ user: verified.rows[0], redirect_to: '/dashboard/setup' });
+    const token = setAuthCookie(res, verified.rows[0]);
+    return res.json({ user: verified.rows[0], token, redirect_to: '/dashboard/setup' });
   } catch (error) {
     return next(error);
   }
@@ -227,8 +230,8 @@ authRouter.post('/login', async (req, res, next) => {
       return res.status(401).json({ message: 'invalid_credentials' });
     }
     if (!user.email_verified_at) return res.status(403).json({ message: 'email_not_verified' });
-    setAuthCookie(res, user);
-    return res.json({ user, redirect_to: '/dashboard' });
+    const token = setAuthCookie(res, user);
+    return res.json({ user, token, redirect_to: '/dashboard' });
   } catch (error) {
     return next(error);
   }

@@ -8,6 +8,12 @@ import { getOAuthReturnTo } from '../../../lib/oauth';
 
 type Mode = 'login' | 'signup' | 'otp';
 
+function persistWebToken(token?: string) {
+  if (!token) return;
+  const maxAge = 60 * 60 * 24 * 30;
+  document.cookie = `jt_token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+}
+
 export function AuthPanel() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -54,6 +60,7 @@ export function AuthPanel() {
     event.preventDefault();
     if (mode === 'login') {
       const data = await submit('/api/auth/login', { email, password });
+      persistWebToken(data?.token);
       if (data?.redirect_to) window.location.href = data.redirect_to;
       return;
     }
@@ -66,6 +73,7 @@ export function AuthPanel() {
       return;
     }
     const data = await submit('/api/auth/verify-otp', { email, otp });
+    persistWebToken(data?.token);
     if (data?.redirect_to) window.location.href = data.redirect_to;
   }
 

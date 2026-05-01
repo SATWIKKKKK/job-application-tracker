@@ -1,4 +1,4 @@
-import type { User } from '@jobtrackr/types';
+import type { User } from '../../../lib/types';
 import { redirect } from 'next/navigation';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { apiFetch } from '../../../lib/api';

@@ -9,6 +9,7 @@ export const SHEET_HEADERS = [
   'Portal',
   'Applied Date',
   'Status',
+  'Job URL',
 ];
 
 const STATUS_COLUMN_INDEX = 5;
@@ -111,7 +112,7 @@ export async function createApplicationSheet(userId: string) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Applications!A1:F1',
+    range: 'Applications!A1:G1',
     valueInputOption: 'RAW',
     requestBody: { values: [SHEET_HEADERS] },
   });
@@ -138,30 +139,38 @@ async function ensureApplicationSheet(userId: string) {
 }
 
 export async function appendApplicationRow(userId: string, row: string[]) {
-  const spreadsheetId = await ensureApplicationSheet(userId);
-  const sheets = await getAuthedSheetsClient(userId);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: 'Applications!A:F',
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [row] },
-  });
-  await applyStatusFormatting(sheets, spreadsheetId);
+  await appendApplicationRows(userId, [row]);
 }
 
 export async function appendApplicationRows(userId: string, rows: string[][]) {
   if (!rows.length) return;
   const spreadsheetId = await ensureApplicationSheet(userId);
   const sheets = await getAuthedSheetsClient(userId);
-  await sheets.spreadsheets.values.append({
+  const startRow = await getNextApplicationSheetRow(sheets, spreadsheetId);
+  const endRow = startRow + rows.length - 1;
+
+  await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Applications!A:F',
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
+    range: `Applications!A${startRow}:G${endRow}`,
+    valueInputOption: 'RAW',
     requestBody: { values: rows },
   });
   await applyStatusFormatting(sheets, spreadsheetId);
+}
+
+async function getNextApplicationSheetRow(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+) {
+  const values = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'Applications!A:A',
+  });
+  const rows = values.data.values ?? [];
+  for (let index = rows.length - 1; index >= 1; index -= 1) {
+    if (String(rows[index]?.[0] ?? '').trim()) return index + 2;
+  }
+  return 2;
 }
 
 export async function updateApplicationStatusRow(
@@ -217,6 +226,24 @@ async function applyStatusFormatting(
     spreadsheetId,
     requestBody: {
       requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 4,
+              endColumnIndex: 5,
+            },
+            cell: {
+              userEnteredFormat: {
+                numberFormat: {
+                  type: 'TEXT',
+                },
+              },
+            },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
         ...removeExistingRules,
         ...STATUS_COLOR_RULES.map((color) => ({
           addConditionalFormatRule: {
@@ -246,4 +273,29 @@ async function applyStatusFormatting(
       ],
     },
   });
+
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            setBasicFilter: {
+              filter: {
+                range: {
+                  sheetId,
+                  startRowIndex: 0,
+                  startColumnIndex: 0,
+                  endColumnIndex: 7,
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown_error';
+    console.warn('Sheet basic filter setup skipped/failed:', message);
+  }
 }

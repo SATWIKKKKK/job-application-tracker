@@ -21,17 +21,22 @@ const daysMap = {
   yearly: 365,
 } as const;
 
-const razorpay = new Razorpay({
-  key_id: config.razorpayKeyId,
-  key_secret: config.razorpayKeySecret,
-});
+function getRazorpay() {
+  if (!config.razorpayKeyId || !config.razorpayKeySecret) {
+    throw new Error('razorpay_not_configured');
+  }
+  return new Razorpay({
+    key_id: config.razorpayKeyId,
+    key_secret: config.razorpayKeySecret,
+  });
+}
 
 paymentsRouter.post('/create-order', async (req, res, next) => {
   try {
     const { plan } = z
       .object({ plan: z.enum(['monthly', 'quarterly', 'yearly']) })
       .parse(req.body);
-    const order = await razorpay.orders.create({
+    const order = await getRazorpay().orders.create({
       amount: amountMap[plan],
       currency: 'INR',
       receipt: `jt_${Date.now()}`,

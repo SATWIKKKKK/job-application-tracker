@@ -21,6 +21,7 @@ sheetsRouter.post('/setup', async (req, res, next) => {
 const logSchema = z.object({
   job_title: z.string(),
   company: z.string(),
+  role_type: z.string().optional().default('Full Time'),
   portal: z.string(),
   location: z.string().optional().default(''),
   job_url: z.string().optional().default(''),
@@ -34,11 +35,11 @@ sheetsRouter.post('/log', async (req, res, next) => {
     await appendApplicationRow(req.user!.id, [
       body.job_title,
       body.company,
+      body.role_type,
       body.portal,
-      body.location,
-      body.job_url,
-      body.applied_at,
+      new Date(body.applied_at).toISOString().slice(0, 10),
       body.status,
+      body.job_url,
     ]);
     res.json({ ok: true });
   } catch (error) {

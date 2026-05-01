@@ -1,4 +1,4 @@
-import type { JobApplication } from '@jobtrackr/types';
+import type { JobApplication } from '../types.js';
 import { config } from '../config.js';
 
 const shell = (title: string, body: string) => `

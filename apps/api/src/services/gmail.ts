@@ -129,7 +129,19 @@ export async function processGmailWebhook(emailAddress: string, historyId: strin
 
   const gmail = await getAuthedGmailClient(found.id);
   const startHistoryId = found.gmail_watch_history_id ?? historyId;
-  const messageIds = await listHistoryMessageIds(gmail, startHistoryId);
+  let messageIds: string[];
+  try {
+    messageIds = await listHistoryMessageIds(gmail, startHistoryId);
+  } catch (error) {
+    await insertWebhookLog({
+      userId: found.id,
+      pubsubEmail: emailAddress,
+      sender: null,
+      subject: null,
+      result: `history_fallback:${error instanceof Error ? error.message : 'unknown_error'}`,
+    });
+    messageIds = await listRecentApplicationMessageIds(gmail, 50);
+  }
   let processed = 0;
 
   for (const messageId of messageIds) {
@@ -166,6 +178,27 @@ export async function processGmailWebhook(emailAddress: string, historyId: strin
   }
 
   await query('update users set gmail_watch_history_id = $1 where id = $2', [historyId, found.id]);
+  return { processed };
+}
+
+export async function syncRecentGmailConfirmations(userId: string, maxMessages = 50) {
+  const user = await query<{ google_sheet_id: string | null }>(
+    'select google_sheet_id from users where id = $1',
+    [userId],
+  );
+  if (!user.rows[0]?.google_sheet_id) await createApplicationSheet(userId);
+
+  const gmail = await getAuthedGmailClient(userId);
+  const messageIds = await listRecentApplicationMessageIds(gmail, maxMessages);
+  let processed = 0;
+
+  for (const messageId of messageIds) {
+    const email = await fetchMessageText(gmail, messageId);
+    if (!isApplicationConfirmation(email.subject, email.from, email.body)) continue;
+    const inserted = await upsertExtractedEmail(userId, email, false);
+    if (inserted) processed += 1;
+  }
+
   return { processed };
 }
 
@@ -289,6 +322,11 @@ async function listAllMessagesByQuery(gmail: ReturnType<typeof google.gmail>, q:
   return ids;
 }
 
+async function listRecentApplicationMessageIds(gmail: ReturnType<typeof google.gmail>, maxMessages: number) {
+  const ids = await listAllMessagesByQuery(gmail, `${historicalSenderQuery} newer_than:2d`);
+  return ids.slice(0, maxMessages);
+}
+
 async function fetchMessageText(gmail: ReturnType<typeof google.gmail>, messageId: string) {
   const message = await gmail.users.messages.get({
     userId: 'me',
@@ -371,12 +409,14 @@ async function upsertExtractedEmail(
   if (duplicateByCore.rows.length) return null;
 
   const roleType = detectRoleType(email.text);
+  const extractedJobUrl = extractJobUrlFromEmailText(email.text, source);
 
   const inserted = await query<{
     job_title: string;
     company: string;
     role_type: string;
     portal: string;
+    job_url: string | null;
     applied_at: string;
     status: string;
   }>(
@@ -385,14 +425,14 @@ async function upsertExtractedEmail(
        confidence, needs_review, raw_text, gmail_message_id)
      values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9, $10, $11, $12, $13)
      on conflict do nothing
-     returning job_title, company, role_type, portal, applied_at, status`,
+     returning job_title, company, role_type, portal, job_url, applied_at, status`,
     [
       userId,
       role,
       company ?? 'Unknown - Google Doc',
       roleType,
       source,
-      `gmail:${email.id}`,
+      extractedJobUrl,
       appliedAt,
       'Applied',
       extracted,
@@ -518,6 +558,7 @@ function toSheetRow(app: {
   company: string;
   role_type: string;
   portal: string;
+  job_url: string | null;
   applied_at: string;
   status: string;
 }) {
@@ -528,7 +569,45 @@ function toSheetRow(app: {
     app.portal,
     new Date(app.applied_at).toISOString().slice(0, 10),
     app.status,
+    app.job_url ?? '',
   ];
+}
+
+function extractJobUrlFromEmailText(text: string, portal: string) {
+  const allowedDomains = [
+    'linkedin.com',
+    'naukri.com',
+    'internshala.com',
+    'unstop.com',
+    'indeed.com',
+    'wellfound.com',
+    'glassdoor.com',
+    'cutshort.io',
+    'hirect.in',
+    'shine.com',
+    'foundit.in',
+    'monsterindia.com',
+    'docs.google.com',
+    'forms.gle',
+    'forms.google.com',
+  ];
+  const blockedFragments = ['unsubscribe', 'preferences', 'privacy', 'help', 'support', 'login'];
+  const urls = text.match(/https?:\/\/[^\s)>"']+/gi) ?? [];
+  for (const url of urls) {
+    const normalized = url.replace(/[)>.,]+$/g, '');
+    let host = '';
+    try {
+      host = new URL(normalized).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    if (!allowedDomains.some((domain) => host === domain || host.endsWith(`.${domain}`))) continue;
+    const lower = normalized.toLowerCase();
+    if (blockedFragments.some((fragment) => lower.includes(fragment))) continue;
+    return normalized;
+  }
+  if (portal === 'Google Forms') return null;
+  return null;
 }
 
 function normalizeCandidateField(value: string | null | undefined) {

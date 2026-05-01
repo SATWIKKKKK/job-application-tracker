@@ -1,6 +1,10 @@
 import { AuthPanel } from './signin-client';
+import { redirect } from 'next/navigation';
+import { getSessionUser } from '../../../lib/auth';
 
 export default function SignInPage() {
+  const user = getSessionUser();
+  if (user) redirect('/dashboard');
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
       <AuthPanel />

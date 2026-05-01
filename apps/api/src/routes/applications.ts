@@ -31,6 +31,7 @@ const manualLogSchema = z.object({
   portal: z.string().min(1),
   applied_at: z.string().min(1),
   status: z.enum(['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted', 'In Progress']),
+  job_url: z.string().url().optional().or(z.literal('')),
 });
 
 applicationsRouter.post('/log', async (req, res, next) => {
@@ -80,6 +81,7 @@ applicationsRouter.post('/log', async (req, res, next) => {
         app.portal,
         new Date(app.applied_at).toISOString().slice(0, 10),
         app.status,
+        app.job_url ?? '',
       ]);
     } catch (error) {
       console.warn('Sheet append skipped/failed:', error);
@@ -111,8 +113,8 @@ applicationsRouter.post('/manual', async (req, res, next) => {
 
     const inserted = await query<JobApplication>(
       `insert into applications
-        (user_id, job_title, company, role_type, portal, applied_at, status, raw_data)
-       values ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8)
+        (user_id, job_title, company, role_type, portal, job_url, applied_at, status, raw_data)
+       values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9)
        returning *`,
       [
         req.user!.id,
@@ -120,6 +122,7 @@ applicationsRouter.post('/manual', async (req, res, next) => {
         body.company,
         body.role_type,
         body.portal,
+        body.job_url || null,
         appliedAt.toISOString(),
         body.status,
         { ...body, source: 'manual' },
@@ -134,6 +137,7 @@ applicationsRouter.post('/manual', async (req, res, next) => {
       app.portal,
       new Date(app.applied_at).toISOString().slice(0, 10),
       app.status,
+      app.job_url ?? '',
     ]);
 
     return res.status(201).json({ application: app, message: 'application_logged_to_sheet' });

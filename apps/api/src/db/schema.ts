@@ -93,9 +93,11 @@ export async function ensureDatabaseShape() {
   await query('create index if not exists idx_applications_needs_review on applications(needs_review) where needs_review = true');
   await query('create index if not exists idx_webhook_logs_created_at on webhook_logs(created_at desc)');
   await query('create index if not exists idx_webhook_logs_user_id on webhook_logs(user_id)');
+  await query('drop index if exists idx_applications_user_source_unique');
   await query(`
-    create unique index if not exists idx_applications_user_source_unique
-    on applications(user_id, (coalesce(job_url, '')), applied_at)
+    create unique index if not exists idx_applications_user_url_unique
+    on applications(user_id, job_url)
+    where job_url is not null and job_url <> ''
   `);
   await query(`
     create unique index if not exists idx_applications_gmail_message_id

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BadgeCheck, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, Globe2, Plus, Search, Tags } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -23,6 +23,14 @@ const statusClass: Record<string, string> = {
 const statuses: ApplicationStatus[] = ['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted', 'In Progress'];
 const roleTypes = ['Full Time', 'Part Time', 'Internship', 'Contract', 'Stipend Based'];
 const manualPortals = [...SUPPORTED_PORTALS, 'Other'];
+
+function getBrowserAuthHeaders() {
+  const token = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith('jt_token='))
+    ?.split('=')[1];
+  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
+}
 
 function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
@@ -53,17 +61,31 @@ export function ApplicationsPageClient({
     company: '',
     role_type: 'Full Time',
     portal: 'LinkedIn',
+    job_url: '',
     applied_at: todayInputValue(),
     status: 'Applied',
   });
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void fetch(`${API_URL}/api/gmail/sync-recent`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getBrowserAuthHeaders(),
+      }).finally(() => {
+        router.refresh();
+      });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [router]);
+
   async function updateStatus(app: JobApplication, status: ApplicationStatus) {
     setRows((current) => current.map((item) => (item.id === app.id ? { ...item, status } : item)));
     const response = await fetch(`${API_URL}/api/applications/${app.id}/status`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({ status }),
     });
@@ -103,7 +125,7 @@ export function ApplicationsPageClient({
     try {
       const response = await fetch(`${API_URL}/api/applications/manual`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify(manualForm),
       });
@@ -118,6 +140,7 @@ export function ApplicationsPageClient({
         company: '',
         role_type: 'Full Time',
         portal: 'LinkedIn',
+        job_url: '',
         applied_at: todayInputValue(),
         status: 'Applied',
       });
@@ -278,6 +301,14 @@ export function ApplicationsPageClient({
                     <option key={portal}>{portal}</option>
                   ))}
                 </select>
+              </ManualField>
+              <ManualField icon={<Globe2 />} label="Application URL (Optional)">
+                <input
+                  className="manual-input"
+                  placeholder="https://..."
+                  value={manualForm.job_url}
+                  onChange={(event) => updateManualForm('job_url', event.target.value)}
+                />
               </ManualField>
               <ManualField icon={<CalendarDays />} label="Applied Date">
                 <input

@@ -1,0 +1,32 @@
+{
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.ts"
+    },
+    {
+      "src": "/health",
+      "dest": "api/index.ts"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/gmail-catchup",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/gmail-renew",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 3 * * 1"
+    }
+  ]
+}

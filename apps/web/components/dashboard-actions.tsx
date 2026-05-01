@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Bell, HelpCircle, MessageSquare, Search, Sparkles } from 'lucide-react';
-import type { User } from '@jobtrackr/types';
+import type { User } from '../lib/types';
 
 export function DashboardTopBar({ user }: { user: User }) {
   const [query, setQuery] = useState('');

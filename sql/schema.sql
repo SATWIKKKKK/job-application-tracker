@@ -64,7 +64,10 @@ create index if not exists idx_applications_user_applied_at on applications(user
 create index if not exists idx_applications_needs_review on applications(needs_review) where needs_review = true;
 create index if not exists idx_webhook_logs_created_at on webhook_logs(created_at desc);
 create index if not exists idx_webhook_logs_user_id on webhook_logs(user_id);
-create unique index if not exists idx_applications_user_source_unique on applications(user_id, (coalesce(job_url, '')), applied_at);
+drop index if exists idx_applications_user_source_unique;
+create unique index if not exists idx_applications_user_url_unique
+  on applications(user_id, job_url)
+  where job_url is not null and job_url <> '';
 create unique index if not exists idx_applications_gmail_message_id on applications(gmail_message_id) where gmail_message_id is not null;
 
 -- Neon does not expose Supabase auth.uid()-style RLS. Ownership is enforced in API queries
