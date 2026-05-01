@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
+import { getOAuthReturnTo } from '../lib/oauth';
 
 type ScanStatus = {
   initial_scan_completed: boolean;
@@ -67,7 +68,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   }
 
   function connectGmail() {
-    const returnTo = window.location.origin;
+    const returnTo = getOAuthReturnTo();
     window.location.href = `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
   }
 

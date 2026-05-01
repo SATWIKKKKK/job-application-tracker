@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { API_URL } from '../../../lib/config';
+import { getOAuthReturnTo } from '../../../lib/oauth';
 
 type Mode = 'login' | 'signup' | 'otp';
 
@@ -166,6 +167,6 @@ function GoogleIcon() {
   );
 }
   function getGoogleAuthUrl() {
-    const returnTo = typeof window !== 'undefined' ? window.location.origin : '';
+    const returnTo = getOAuthReturnTo();
     return `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
   }

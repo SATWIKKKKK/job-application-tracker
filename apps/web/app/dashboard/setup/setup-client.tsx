@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowRight, FileSpreadsheet, Puzzle } from 'lucide-react';
 import { API_URL } from '../../../lib/config';
+import { getOAuthReturnTo } from '../../../lib/oauth';
 
 export function SetupClient() {
   const [message, setMessage] = useState('');
@@ -57,6 +58,6 @@ export function SetupClient() {
   );
 }
   function getGoogleAuthUrl() {
-    const returnTo = typeof window !== 'undefined' ? window.location.origin : '';
+    const returnTo = getOAuthReturnTo();
     return `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
   }
