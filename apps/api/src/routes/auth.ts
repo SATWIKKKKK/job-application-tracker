@@ -48,7 +48,7 @@ authRouter.get('/google', (_req, res) => {
   const returnToQuery = typeof req.query.return_to === 'string' ? req.query.return_to : null;
   const originHeader = req.get('origin');
   const refererOrigin = originFromReferer(req.get('referer'));
-  const safeReturnTo = resolveReturnOrigin([returnToQuery, originHeader, refererOrigin, config.webUrl]);
+  const safeReturnTo = resolveReturnOrigin([originHeader, refererOrigin, returnToQuery, config.webUrl]);
   res.cookie(oauthReturnCookie, safeReturnTo, oauthReturnCookieOptions);
   const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo }), 'utf8').toString('base64url');
   res.redirect(getGoogleAuthUrl(state));
@@ -137,7 +137,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
         const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
           return_to?: string;
         };
-        return resolveReturnOrigin([parsed.return_to, cookieReturnTo, config.webUrl]);
+        return resolveReturnOrigin([cookieReturnTo, parsed.return_to, config.webUrl]);
       } catch {
         return resolveReturnOrigin([cookieReturnTo, config.webUrl]);
       }
