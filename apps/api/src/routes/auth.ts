@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { requireAuth, signAppJwt, type AuthUser } from '../middleware/auth.js';
-import { getGoogleAuthUrl, getOAuthClient } from '../services/google.js';
+import { createApplicationSheet, getGoogleAuthUrl, getOAuthClient } from '../services/google.js';
+import { startGmailWatch } from '../services/gmail.js';
 import { sendEmail } from '../services/email.js';
 import { verificationOtpEmail } from '../templates/emails.js';
 import { createOtp, hashSecret, verifySecret } from '../services/password.js';
@@ -26,7 +27,21 @@ function setAuthCookie(res: Response, user: AuthUser) {
 }
 
 authRouter.get('/google', (_req, res) => {
-  res.redirect(getGoogleAuthUrl());
+  const req = _req;
+  const returnToQuery = typeof req.query.return_to === 'string' ? req.query.return_to : null;
+  const refererOrigin = (() => {
+    const referer = req.get('referer');
+    if (!referer) return null;
+    try {
+      return new URL(referer).origin;
+    } catch {
+      return null;
+    }
+  })();
+  const returnTo = returnToQuery ?? refererOrigin ?? config.webUrl;
+  const safeReturnTo = /^https?:\/\/[^/]+$/i.test(returnTo) ? returnTo : config.webUrl;
+  const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo }), 'utf8').toString('base64url');
+  res.redirect(getGoogleAuthUrl(state));
 });
 
 authRouter.get('/google/callback', async (req, res, next) => {
@@ -40,6 +55,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
     const profile = await oauth2.userinfo.get();
     const email = profile.data.email;
     if (!email) return res.status(400).send('Google account did not return an email.');
+    const emailLower = email.toLowerCase();
 
     let appUser: AuthUser;
     const existingToken = req.cookies?.jt_token;
@@ -53,11 +69,15 @@ authRouter.get('/google/callback', async (req, res, next) => {
         })()
       : null;
 
-    if (existingUser?.id) {
+    // Only keep the cookie-session user when the selected Google email is the same account.
+    // Otherwise resolve by Google email so two different emails never merge into one dashboard.
+    if (existingUser?.id && existingUser.email.toLowerCase() === emailLower) {
       const linked = await query<AuthUser>(
         `update users
          set google_refresh_token = coalesce($1, google_refresh_token),
-             name = coalesce(name, $2)
+             name = coalesce(name, $2),
+             gmail_connected = false,
+             initial_scan_completed = false
          where id = $3
          returning id, email, name`,
         [tokens.refresh_token ?? null, profile.data.name ?? null, existingUser.id],
@@ -70,15 +90,51 @@ authRouter.get('/google/callback', async (req, res, next) => {
        on conflict (email)
        do update set
          name = excluded.name,
-         google_refresh_token = coalesce(excluded.google_refresh_token, users.google_refresh_token)
+         google_refresh_token = coalesce(excluded.google_refresh_token, users.google_refresh_token),
+         gmail_connected = false,
+         initial_scan_completed = false
        returning id, email, name`,
-        [email, profile.data.name ?? null, tokens.refresh_token ?? null],
+        [emailLower, profile.data.name ?? null, tokens.refresh_token ?? null],
       );
       appUser = user.rows[0];
     }
 
+    try {
+      const sheet = await query<{ google_sheet_id: string | null }>(
+        'select google_sheet_id from users where id = $1',
+        [appUser.id],
+      );
+      if (!sheet.rows[0]?.google_sheet_id) await createApplicationSheet(appUser.id);
+    } catch (error) {
+      if (!(error instanceof Error && error.message === 'missing_google_refresh_token')) {
+        console.warn('Google sheet setup skipped/failed:', error);
+      }
+    }
+
+    try {
+      await startGmailWatch(appUser.id);
+    } catch (error) {
+      console.warn('Gmail watch setup skipped/failed:', error);
+    }
+
+    const redirectBaseUrl = (() => {
+      const state = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!state) return config.webUrl;
+      try {
+        const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
+          return_to?: string;
+        };
+        if (parsed.return_to && /^https?:\/\/[^/]+$/i.test(parsed.return_to)) {
+          return parsed.return_to;
+        }
+      } catch {
+        return config.webUrl;
+      }
+      return config.webUrl;
+    })();
+
     setAuthCookie(res, appUser);
-    res.redirect(`${config.webUrl}/dashboard/setup`);
+    res.redirect(`${redirectBaseUrl}/dashboard?oauth=google`);
   } catch (error) {
     next(error);
   }

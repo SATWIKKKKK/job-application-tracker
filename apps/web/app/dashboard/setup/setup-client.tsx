@@ -20,7 +20,7 @@ export function SetupClient() {
       const data = await response.json();
       if (!response.ok) {
         if (data.message === 'missing_google_refresh_token') {
-          window.location.href = `${API_URL}/api/auth/google`;
+          window.location.href = getGoogleAuthUrl();
           return;
         }
         setMessage(data.message ?? 'Could not create sheet');
@@ -56,3 +56,7 @@ export function SetupClient() {
     </section>
   );
 }
+  function getGoogleAuthUrl() {
+    const returnTo = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
+  }
