@@ -5,11 +5,14 @@ import { ZodError } from 'zod';
 import { config } from './config.js';
 import { applicationsRouter } from './routes/applications.js';
 import { authRouter } from './routes/auth.js';
+import { cronRouter } from './routes/cron.js';
+import { gmailRouter } from './routes/gmail.js';
 import { meRouter } from './routes/me.js';
 import { paymentsRouter } from './routes/payments.js';
 import { sheetsRouter } from './routes/sheets.js';
-import { startWeeklyDigestJob } from './jobs/weeklyDigest.js';
+import { userRouter } from './routes/user.js';
 import { ensureDatabaseShape } from './db/schema.js';
+import { isAllowedReturnOrigin, isLocalOrigin, parseOrigin } from './utils/origin.js';
 
 const app = express();
 
@@ -17,16 +20,10 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
-      const allowed = new Set([
-        config.webUrl,
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3003',
-        'http://localhost:3004',
-        'http://localhost:3005',
-      ]);
-      callback(null, allowed.has(origin));
+      const normalized = parseOrigin(origin);
+      if (!normalized) return callback(null, false);
+      if (isLocalOrigin(normalized)) return callback(null, true);
+      callback(null, isAllowedReturnOrigin(normalized, config.webUrl));
     },
     credentials: true,
   }),
@@ -36,10 +33,13 @@ app.use(cookieParser());
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRouter);
+app.use('/api/cron', cronRouter);
+app.use('/api/gmail', gmailRouter);
 app.use('/api/me', meRouter);
 app.use('/api/sheets', sheetsRouter);
 app.use('/api/applications', applicationsRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/user', userRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   void _next;
@@ -53,9 +53,19 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   return res.status(500).json({ message: 'internal_error' });
 });
 
-await ensureDatabaseShape();
-startWeeklyDigestJob();
+let initialized = false;
+async function initialize() {
+  if (initialized) return;
+  initialized = true;
+  await ensureDatabaseShape();
+}
 
-app.listen(config.port, () => {
-  console.log(`JobTrackr API listening on http://localhost:${config.port}`);
+void initialize().then(() => {
+  if (process.env.NODE_ENV !== 'production') {
+    app.listen(config.port, () => {
+      console.log(`JobTrackr API listening on http://localhost:${config.port}`);
+    });
+  }
 });
+
+export default app;

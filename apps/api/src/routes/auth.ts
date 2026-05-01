@@ -10,6 +10,7 @@ import { startGmailWatch } from '../services/gmail.js';
 import { sendEmail } from '../services/email.js';
 import { verificationOtpEmail } from '../templates/emails.js';
 import { createOtp, hashSecret, verifySecret } from '../services/password.js';
+import { isAllowedReturnOrigin, originFromReferer, parseOrigin } from '../utils/origin.js';
 
 export const authRouter = Router();
 
@@ -20,22 +21,20 @@ const cookieOptions = {
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
-function normalizeReturnOrigin(candidate: string | null | undefined) {
-  if (!candidate) return config.webUrl;
-  if (!/^https?:\/\/[^/]+$/i.test(candidate)) return config.webUrl;
-  try {
-    const parsed = new URL(candidate);
-    if (
-      parsed.hostname === 'localhost' ||
-      parsed.hostname === '127.0.0.1' ||
-      parsed.hostname === '::1'
-    ) {
-      return config.webUrl;
-    }
-    return parsed.origin;
-  } catch {
-    return config.webUrl;
+const oauthReturnCookie = 'jt_oauth_return_to';
+const oauthReturnCookieOptions = {
+  ...cookieOptions,
+  maxAge: 10 * 60 * 1000,
+};
+
+function resolveReturnOrigin(candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = parseOrigin(candidate);
+    if (!parsed) continue;
+    if (isAllowedReturnOrigin(parsed, config.webUrl)) return parsed;
   }
+  return parseOrigin(config.webUrl) ?? 'http://localhost:3001';
 }
 
 function setAuthCookie(res: Response, user: AuthUser) {
@@ -47,17 +46,10 @@ function setAuthCookie(res: Response, user: AuthUser) {
 authRouter.get('/google', (_req, res) => {
   const req = _req;
   const returnToQuery = typeof req.query.return_to === 'string' ? req.query.return_to : null;
-  const refererOrigin = (() => {
-    const referer = req.get('referer');
-    if (!referer) return null;
-    try {
-      return new URL(referer).origin;
-    } catch {
-      return null;
-    }
-  })();
-  const returnTo = returnToQuery ?? refererOrigin ?? config.webUrl;
-  const safeReturnTo = normalizeReturnOrigin(returnTo);
+  const originHeader = req.get('origin');
+  const refererOrigin = originFromReferer(req.get('referer'));
+  const safeReturnTo = resolveReturnOrigin([returnToQuery, originHeader, refererOrigin, config.webUrl]);
+  res.cookie(oauthReturnCookie, safeReturnTo, oauthReturnCookieOptions);
   const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo }), 'utf8').toString('base64url');
   res.redirect(getGoogleAuthUrl(state));
 });
@@ -136,20 +128,23 @@ authRouter.get('/google/callback', async (req, res, next) => {
     }
 
     const redirectBaseUrl = (() => {
+      const cookieReturnTo = typeof req.cookies?.[oauthReturnCookie] === 'string'
+        ? req.cookies[oauthReturnCookie]
+        : null;
       const state = typeof req.query.state === 'string' ? req.query.state : '';
-      if (!state) return config.webUrl;
+      if (!state) return resolveReturnOrigin([cookieReturnTo, config.webUrl]);
       try {
         const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
           return_to?: string;
         };
-        return normalizeReturnOrigin(parsed.return_to);
+        return resolveReturnOrigin([parsed.return_to, cookieReturnTo, config.webUrl]);
       } catch {
-        return config.webUrl;
+        return resolveReturnOrigin([cookieReturnTo, config.webUrl]);
       }
-      return config.webUrl;
     })();
 
     setAuthCookie(res, appUser);
+    res.clearCookie(oauthReturnCookie);
     res.redirect(`${redirectBaseUrl}/dashboard?oauth=google`);
   } catch (error) {
     next(error);

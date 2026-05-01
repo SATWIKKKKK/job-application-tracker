@@ -20,6 +20,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   const [showSuccessModal, setShowSuccessModal] = useState(oauthJustCompleted && !user.gmail_connected);
   const [isScanning, setIsScanning] = useState(oauthJustCompleted && user.gmail_connected && !user.initial_scan_completed);
   const [scanFinishedMessage, setScanFinishedMessage] = useState(false);
+  const [sheetError, setSheetError] = useState('');
 
   useEffect(() => {
     if (!isScanning || scanCompleted) return;
@@ -73,14 +74,32 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   }
 
   async function openSheet() {
+    setSheetError('');
     const sheetTab = window.open('', '_blank');
     try {
       const response = await fetch(`${API_URL}/api/user/sheet-url`, { credentials: 'include' });
-      if (!response.ok) throw new Error('sheet_url_failed');
-      const data = (await response.json()) as { sheet_id: string | null; sheet_url: string | null };
+      const data = (await response.json()) as {
+        sheet_id: string | null;
+        sheet_url: string | null;
+        requires_reconnect?: boolean;
+        reason?: string;
+      };
+      if (!response.ok) {
+        sheetTab?.close();
+        if (data.requires_reconnect) {
+          connectGmail();
+          return;
+        }
+        setSheetError('Could not open your Google Sheet. Please try again.');
+        return;
+      }
       if (!data.sheet_url) {
         sheetTab?.close();
-        connectGmail();
+        if (data.requires_reconnect) {
+          connectGmail();
+          return;
+        }
+        setSheetError('Sheet is not ready yet. Reconnect Gmail once to generate it.');
         return;
       }
       setSheetId(data.sheet_id);
@@ -134,6 +153,11 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
           <ExternalLink className="h-4 w-4" />
         </button>
       </div>
+      {sheetError ? (
+        <p className="mt-2 rounded-DEFAULT bg-surface-container px-3 py-2 text-sm text-on-surface-variant">
+          {sheetError}
+        </p>
+      ) : null}
 
       {showSuccessModal ? (
         <GmailSuccessModal
