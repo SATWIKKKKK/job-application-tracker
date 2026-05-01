@@ -28,6 +28,9 @@ const oauthReturnCookieOptions = {
 };
 
 function resolveReturnOrigin(candidates: Array<string | null | undefined>) {
+  if (process.env.NODE_ENV !== 'production') {
+    return parseOrigin(config.webUrl) ?? 'http://localhost:3001';
+  }
   for (const candidate of candidates) {
     if (!candidate) continue;
     const parsed = parseOrigin(candidate);
