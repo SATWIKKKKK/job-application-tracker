@@ -20,6 +20,24 @@ const cookieOptions = {
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
+function normalizeReturnOrigin(candidate: string | null | undefined) {
+  if (!candidate) return config.webUrl;
+  if (!/^https?:\/\/[^/]+$/i.test(candidate)) return config.webUrl;
+  try {
+    const parsed = new URL(candidate);
+    if (
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === '::1'
+    ) {
+      return config.webUrl;
+    }
+    return parsed.origin;
+  } catch {
+    return config.webUrl;
+  }
+}
+
 function setAuthCookie(res: Response, user: AuthUser) {
   const token = signAppJwt(user);
   res.cookie('jt_token', token, cookieOptions);
@@ -39,7 +57,7 @@ authRouter.get('/google', (_req, res) => {
     }
   })();
   const returnTo = returnToQuery ?? refererOrigin ?? config.webUrl;
-  const safeReturnTo = /^https?:\/\/[^/]+$/i.test(returnTo) ? returnTo : config.webUrl;
+  const safeReturnTo = normalizeReturnOrigin(returnTo);
   const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo }), 'utf8').toString('base64url');
   res.redirect(getGoogleAuthUrl(state));
 });
@@ -124,9 +142,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
         const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
           return_to?: string;
         };
-        if (parsed.return_to && /^https?:\/\/[^/]+$/i.test(parsed.return_to)) {
-          return parsed.return_to;
-        }
+        return normalizeReturnOrigin(parsed.return_to);
       } catch {
         return config.webUrl;
       }
