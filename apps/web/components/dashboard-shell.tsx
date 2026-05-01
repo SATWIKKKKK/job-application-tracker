@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Cloud, FileText, LayoutDashboard, LogOut, Puzzle, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
-import type { User } from '@jobtrackr/types';
+import { Cloud, FileText, LayoutDashboard, ListChecks, LogOut, Puzzle, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
+import type { User } from '../lib/types';
 import { DashboardTopBar } from './dashboard-actions';
 
 const nav = [
   [LayoutDashboard, 'Dashboard', '/dashboard'],
+  [ListChecks, 'Applications', '/dashboard/applications'],
   [Sparkles, 'Market Insights', '/dashboard?panel=insights'],
   [Workflow, 'Pipeline Analytics', '/dashboard?panel=pipeline'],
   [Puzzle, 'Install Extension', '/dashboard/portals'],

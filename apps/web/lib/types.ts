@@ -1,5 +1,4 @@
 export type Plan = 'free' | 'pro';
-export type PlanInterval = 'monthly' | 'quarterly' | 'yearly';
 export type ApplicationStatus =
   | 'Applied'
   | 'Saved'
@@ -17,20 +16,11 @@ export interface User {
   email: string;
   name: string | null;
   google_sheet_id: string | null;
-  google_refresh_token?: string | null;
   gmail_connected: boolean;
   initial_scan_completed: boolean;
   initial_scan_found_count: number;
   plan: Plan;
   plan_expires_at: string | null;
-  created_at: string;
-}
-
-export interface Portal {
-  id: string;
-  user_id: string;
-  portal_name: string;
-  is_enabled: boolean;
   created_at: string;
 }
 
@@ -51,21 +41,4 @@ export interface JobApplication {
   needs_review: boolean;
   gmail_message_id: string | null;
   created_at: string;
-}
-
-export interface LogApplicationBody {
-  job_title: string;
-  company: string;
-  role_type?: RoleType;
-  portal: string;
-  job_url?: string;
-  location?: string;
-  applied_at?: string;
-}
-
-export interface PaginatedApplications {
-  data: JobApplication[];
-  page: number;
-  page_size: number;
-  total: number;
 }

@@ -1,38 +1,84 @@
 import { google } from 'googleapis';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
-import { checkDuplicate, detectRoleType, extractJobFromEmail, updateJobStatus, type ExtractedJob } from './ai.js';
+import { detectRoleType, extractJobFromEmail, type ExtractedJob } from './ai.js';
 import { appendApplicationRow, appendApplicationRows, createApplicationSheet, getAuthedGmailClient } from './google.js';
 
-const portalSenders: Record<string, string> = {
-  'jobs-noreply@linkedin.com': 'LinkedIn',
-  'donotreply@naukri.com': 'Naukri',
-  'info@internshala.com': 'Internshala',
-  'noreply@unstop.com': 'Unstop',
-  'indeedapply@indeed.com': 'Indeed',
-  'noreply@wellfound.com': 'Wellfound',
-  'noreply@glassdoor.com': 'Glassdoor',
-  'noreply@cutshort.io': 'Cutshort',
-  'no-reply@hirect.in': 'Hirect',
-  'forms-receipts-noreply@google.com': 'Google Forms',
+type PortalRule = {
+  portal: string;
+  senders: string[];
+  subjectKeywords: string[];
 };
 
-const senderQuery = [
-  `(from:jobs-noreply@linkedin.com (subject:"your application was sent to" OR subject:"you applied to" OR subject:"application submitted") -subject:"jobs similar to" -subject:"is hiring" -subject:"apply now" -subject:"recommended for you" -subject:"new jobs for you" -subject:"job alert" -subject:"people also viewed" -subject:"are you still interested" -subject:"job suggestion" -subject:"jobs in")`,
-  `(from:donotreply@naukri.com (subject:"application submitted" OR subject:"application received" OR subject:"you applied" OR subject:"application confirmation") -subject:"recommended" -subject:"job alert" -subject:"jobs for you" -subject:"apply now" -subject:"is hiring" -subject:"suggestion" -subject:"jobs in")`,
-  `(from:info@internshala.com (subject:"application submitted" OR subject:"application received" OR subject:"you applied" OR subject:"application confirmation") -subject:"recommended" -subject:"job alert" -subject:"jobs for you" -subject:"apply now" -subject:"is hiring" -subject:"suggestion")`,
-  `(from:noreply@unstop.com (subject:"you applied" OR subject:"application submitted" OR subject:"application received" OR subject:"submitted successfully") -subject:"recommended" -subject:"opportunities for you" -subject:"apply now" -subject:"is hiring" -subject:"jobs for you")`,
-  `(from:indeedapply@indeed.com (subject:"you applied for" OR subject:"application received" OR subject:"application confirmation") -subject:"jobs for you" -subject:"alert" -subject:"recommendation" -subject:"new jobs")`,
-  `(from:noreply@wellfound.com (subject:"you applied" OR subject:"application submitted" OR subject:"application received") -subject:"recommended" -subject:"new jobs" -subject:"jobs for you" -subject:"apply now" -subject:"is hiring" -subject:"discover jobs")`,
-  `(from:noreply@glassdoor.com (subject:"application submitted" OR subject:"you applied" OR subject:"your application") -subject:"jobs near you" -subject:"apply now" -subject:"salary" -subject:"review" -subject:"for you" -subject:"more jobs")`,
-  `(from:noreply@cutshort.io (subject:"you applied" OR subject:"application submitted" OR subject:"application received" OR subject:"application confirmation") -subject:"recommended" -subject:"job alert" -subject:"jobs for you" -subject:"apply now" -subject:"is hiring")`,
-  `(from:no-reply@hirect.in (subject:"you applied" OR subject:"application submitted" OR subject:"application received" OR subject:"application confirmation") -subject:"recommended" -subject:"job alert" -subject:"jobs for you" -subject:"apply now" -subject:"is hiring")`,
-  `(from:forms-receipts-noreply@google.com (subject:"your response for" OR subject:"has been recorded" OR subject:"response recorded"))`,
-].join(' OR ');
+const portalRules: PortalRule[] = [
+  {
+    portal: 'LinkedIn',
+    senders: ['jobs-noreply@linkedin.com'],
+    subjectKeywords: ['your application was sent to', 'you applied to'],
+  },
+  {
+    portal: 'Naukri',
+    senders: ['donotreply@naukri.com'],
+    subjectKeywords: ['application submitted', 'you have applied', 'successfully applied'],
+  },
+  {
+    portal: 'Internshala',
+    senders: ['info@internshala.com', 'noreply@internshala.com'],
+    subjectKeywords: ['application received', 'you have applied', 'your application for'],
+  },
+  {
+    portal: 'Unstop',
+    senders: ['noreply@unstop.com'],
+    subjectKeywords: ['you applied to', 'your application has been submitted', 'successfully registered'],
+  },
+  {
+    portal: 'Indeed',
+    senders: ['indeedapply@indeed.com', 'noreply@indeed.com'],
+    subjectKeywords: ['you applied for', 'application submitted', 'application confirmation'],
+  },
+  {
+    portal: 'Wellfound',
+    senders: ['noreply@wellfound.com'],
+    subjectKeywords: ['application sent', 'you applied to', 'your application was submitted'],
+  },
+  {
+    portal: 'Glassdoor',
+    senders: ['noreply@glassdoor.com'],
+    subjectKeywords: ['application submitted', 'you applied', 'your application'],
+  },
+  {
+    portal: 'Cutshort',
+    senders: ['noreply@cutshort.io'],
+    subjectKeywords: ['you applied', 'application submitted'],
+  },
+  {
+    portal: 'Hirect',
+    senders: ['no-reply@hirect.in'],
+    subjectKeywords: ['you applied', 'application sent'],
+  },
+  {
+    portal: 'Shine',
+    senders: ['noreply@shine.com'],
+    subjectKeywords: ['application submitted', 'successfully applied'],
+  },
+  {
+    portal: 'Foundit',
+    senders: ['noreply@foundit.in', 'noreply@monsterindia.com'],
+    subjectKeywords: ['application submitted', 'you have applied'],
+  },
+  {
+    portal: 'Google Forms',
+    senders: ['forms-receipts-noreply@google.com'],
+    subjectKeywords: ['your response', 'form submitted', 'response recorded'],
+  },
+];
 
-const INITIAL_SCAN_LIMIT = 200;
-const INITIAL_SCAN_BATCH_SIZE = 20;
-const INITIAL_SCAN_BATCH_DELAY_MS = 500;
+const historicalSenderQuery =
+  '(from:jobs-noreply@linkedin.com OR from:donotreply@naukri.com OR from:info@internshala.com OR from:noreply@internshala.com OR from:noreply@unstop.com OR from:indeedapply@indeed.com OR from:noreply@indeed.com OR from:noreply@wellfound.com OR from:noreply@glassdoor.com OR from:noreply@cutshort.io OR from:no-reply@hirect.in OR from:noreply@shine.com OR from:noreply@foundit.in OR from:noreply@monsterindia.com OR from:forms-receipts-noreply@google.com)';
+
+const scanBatchSize = 20;
+const scanBatchDelayMs = 500;
+const googleDocBodyKeywords = ['position', 'role', 'job title', 'applying for'];
 
 export async function startGmailWatch(userId: string, providedGmail?: ReturnType<typeof google.gmail>) {
   const gmail = providedGmail ?? (await getAuthedGmailClient(userId));
@@ -62,7 +108,24 @@ export async function processGmailWebhook(emailAddress: string, historyId: strin
   }>('select id, gmail_watch_history_id from users where lower(email) = lower($1)', [emailAddress]);
 
   const found = user.rows[0];
-  if (!found) return { processed: 0 };
+  if (!found) {
+    await insertWebhookLog({
+      userId: null,
+      pubsubEmail: emailAddress,
+      sender: null,
+      subject: null,
+      result: 'skipped:user_not_found',
+    });
+    return { processed: 0 };
+  }
+
+  await insertWebhookLog({
+    userId: found.id,
+    pubsubEmail: emailAddress,
+    sender: null,
+    subject: null,
+    result: `received:history:${historyId}`,
+  });
 
   const gmail = await getAuthedGmailClient(found.id);
   const startHistoryId = found.gmail_watch_history_id ?? historyId;
@@ -71,10 +134,35 @@ export async function processGmailWebhook(emailAddress: string, historyId: strin
 
   for (const messageId of messageIds) {
     const email = await fetchMessageText(gmail, messageId);
-    if (!isKnownJobSender(email.from)) continue;
-    if (!isApplicationConfirmation(email.subject, email.from, email.body)) continue;
+    if (!isApplicationConfirmation(email.subject, email.from, email.body)) {
+      await insertWebhookLog({
+        userId: found.id,
+        pubsubEmail: emailAddress,
+        sender: parseSenderEmail(email.from) || null,
+        subject: email.subject || null,
+        result: 'skipped:not_application_confirmation',
+      });
+      continue;
+    }
     const inserted = await upsertExtractedEmail(found.id, email, false);
-    if (inserted) processed += 1;
+    if (!inserted) {
+      await insertWebhookLog({
+        userId: found.id,
+        pubsubEmail: emailAddress,
+        sender: parseSenderEmail(email.from) || null,
+        subject: email.subject || null,
+        result: 'skipped:duplicate_or_low_confidence',
+      });
+      continue;
+    }
+    await insertWebhookLog({
+      userId: found.id,
+      pubsubEmail: emailAddress,
+      sender: parseSenderEmail(email.from) || null,
+      subject: email.subject || null,
+      result: 'processed:appended',
+    });
+    processed += 1;
   }
 
   await query('update users set gmail_watch_history_id = $1 where id = $2', [historyId, found.id]);
@@ -86,36 +174,31 @@ export async function runInitialGmailScan(userId: string) {
     'select initial_scan_completed, google_sheet_id from users where id = $1',
     [userId],
   );
-  if (user.rows[0]?.initial_scan_completed) {
-    return { found: 0 };
-  }
+  if (user.rows[0]?.initial_scan_completed) return { found: 0 };
   if (!user.rows[0]?.google_sheet_id) await createApplicationSheet(userId);
 
   const gmail = await getAuthedGmailClient(userId);
-  const messageIds = await listMessagesByQuery(gmail, senderQuery, INITIAL_SCAN_LIMIT);
+  const messageIds = await listAllMessagesByQuery(gmail, historicalSenderQuery);
   const rows: string[][] = [];
   let found = 0;
 
   try {
-    for (let index = 0; index < messageIds.length; index += INITIAL_SCAN_BATCH_SIZE) {
-      const batch = messageIds.slice(index, index + INITIAL_SCAN_BATCH_SIZE);
+    for (let index = 0; index < messageIds.length; index += scanBatchSize) {
+      const batch = messageIds.slice(index, index + scanBatchSize);
       for (const messageId of batch) {
         const email = await fetchMessageText(gmail, messageId);
         if (!isApplicationConfirmation(email.subject, email.from, email.body)) continue;
         const app = await upsertExtractedEmail(userId, email, true);
-        if (app) {
-          found += 1;
-          rows.push(toSheetRow(app));
-        }
+        if (!app) continue;
+        rows.push(toSheetRow(app));
+        found += 1;
       }
-      if (index + INITIAL_SCAN_BATCH_SIZE < messageIds.length) {
-        await delay(INITIAL_SCAN_BATCH_DELAY_MS);
+      if (index + scanBatchSize < messageIds.length) {
+        await delay(scanBatchDelayMs);
       }
     }
 
-    await appendApplicationRows(userId, rows);
-  } catch (error) {
-    console.warn('Initial scan processing failed/skipped:', error);
+    if (rows.length) await appendApplicationRows(userId, rows);
   } finally {
     await query(
       'update users set initial_scan_completed = true, initial_scan_found_count = $1 where id = $2',
@@ -126,10 +209,27 @@ export async function runInitialGmailScan(userId: string) {
   return { found };
 }
 
+export function isApplicationConfirmation(subject: string, sender: string, body = '') {
+  const normalizedSubject = subject.toLowerCase().replace(/\s+/g, ' ').trim();
+  const senderEmail = parseSenderEmail(sender);
+  const normalizedBody = body.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!senderEmail) return false;
+
+  for (const rule of portalRules) {
+    if (!rule.senders.includes(senderEmail)) continue;
+    return rule.subjectKeywords.some((phrase) => normalizedSubject.includes(phrase));
+  }
+
+  if (isGoogleDomainSender(senderEmail)) {
+    return googleDocBodyKeywords.some((keyword) => normalizedBody.includes(keyword));
+  }
+
+  return false;
+}
+
 export function isPromotionalJobText(value: string | null | undefined) {
   if (!value) return false;
-  const normalized = value.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (!normalized) return false;
+  const normalized = value.toLowerCase();
   return (
     normalized.includes('jobs similar to') ||
     normalized.includes('new jobs for you') ||
@@ -145,10 +245,7 @@ export function isPromotionalJobText(value: string | null | undefined) {
   );
 }
 
-async function listHistoryMessageIds(
-  gmail: ReturnType<typeof google.gmail>,
-  startHistoryId: string,
-) {
+async function listHistoryMessageIds(gmail: ReturnType<typeof google.gmail>, startHistoryId: string) {
   const ids = new Set<string>();
   let pageToken: string | undefined;
 
@@ -170,28 +267,26 @@ async function listHistoryMessageIds(
   return [...ids];
 }
 
-async function listMessagesByQuery(
-  gmail: ReturnType<typeof google.gmail>,
-  q: string,
-  maxResults: number,
-) {
+async function listAllMessagesByQuery(gmail: ReturnType<typeof google.gmail>, q: string) {
   const ids: string[] = [];
   let pageToken: string | undefined;
 
   do {
-    const remaining = maxResults - ids.length;
-    if (remaining <= 0) break;
     const response = await gmail.users.messages.list({
       userId: 'me',
       q,
-      maxResults: Math.min(100, remaining),
+      maxResults: 500,
       pageToken,
     });
-    ids.push(...(response.data.messages ?? []).map((message) => message.id).filter(Boolean) as string[]);
+    ids.push(
+      ...((response.data.messages ?? [])
+        .map((message) => message.id)
+        .filter(Boolean) as string[]),
+    );
     pageToken = response.data.nextPageToken ?? undefined;
-  } while (pageToken && ids.length < maxResults);
+  } while (pageToken);
 
-  return ids.slice(0, maxResults);
+  return ids;
 }
 
 async function fetchMessageText(gmail: ReturnType<typeof google.gmail>, messageId: string) {
@@ -220,7 +315,6 @@ async function fetchMessageText(gmail: ReturnType<typeof google.gmail>, messageI
 type GmailMessagePart = {
   body?: { data?: string | null } | null;
   parts?: GmailMessagePart[] | null;
-  mimeType?: string | null;
 };
 
 function decodeParts(part: GmailMessagePart | undefined): string {
@@ -237,139 +331,6 @@ function decodeBase64Url(value: string) {
   return Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
 }
 
-function isKnownJobSender(from: string) {
-  const lower = from.toLowerCase();
-  return Object.keys(portalSenders).some((sender) => lower.includes(sender));
-}
-
-export function isApplicationConfirmation(subject: string, sender: string, body = '') {
-  return isApplicationConfirmationInternal(subject, sender, body);
-}
-
-type PortalFilterRule = {
-  senderIncludes: string[];
-  allowSubject: string[];
-  denySubject: string[];
-  denyBody?: string[];
-};
-
-const globalDenySubject = [
-  'jobs similar to',
-  'and 1 more job',
-  'and 2 more jobs',
-  'and 3 more jobs',
-  'and 4 more jobs',
-  'and 5 more jobs',
-  'for you',
-  'recommended',
-  'recommendation',
-  'job alert',
-  'alerts',
-  'people also viewed',
-  'are you still interested',
-  'is hiring',
-  'apply now',
-  'job suggestion',
-  'jobs in',
-  'jobs near you',
-  'salary insights',
-  'review',
-];
-
-const portalFilterRules: PortalFilterRule[] = [
-  {
-    senderIncludes: ['linkedin.com'],
-    allowSubject: ['your application was sent to', 'you applied to', 'application submitted'],
-    denySubject: [
-      'jobs similar to',
-      'is hiring',
-      'apply now',
-      'recommended for you',
-      'new jobs for you',
-      'your job alert',
-      'people also viewed',
-      'are you still interested',
-      'job suggestion',
-      'jobs in',
-    ],
-  },
-  {
-    senderIncludes: ['glassdoor.com'],
-    allowSubject: ['application submitted', 'you applied', 'your application'],
-    denySubject: ['jobs near you', 'apply now', 'salary', 'review', 'for you', 'more jobs'],
-  },
-  {
-    senderIncludes: ['indeed.com'],
-    allowSubject: ['you applied for', 'application received', 'application confirmation'],
-    denySubject: ['jobs for you', 'alert', 'recommendation', 'for you', 'new jobs'],
-  },
-  {
-    senderIncludes: ['naukri.com'],
-    allowSubject: ['application submitted', 'application received', 'you applied', 'application confirmation'],
-    denySubject: ['recommended', 'job alert', 'jobs for you', 'apply now', 'is hiring', 'suggestion', 'jobs in'],
-  },
-  {
-    senderIncludes: ['internshala.com'],
-    allowSubject: ['application submitted', 'application received', 'you applied', 'application confirmation'],
-    denySubject: ['recommended', 'job alert', 'jobs for you', 'apply now', 'is hiring', 'suggestion'],
-  },
-  {
-    senderIncludes: ['unstop.com'],
-    allowSubject: ['you applied', 'application submitted', 'application received', 'submitted successfully'],
-    denySubject: ['recommended', 'opportunities for you', 'apply now', 'is hiring', 'jobs for you'],
-  },
-  {
-    senderIncludes: ['wellfound.com'],
-    allowSubject: ['you applied', 'application submitted', 'application received'],
-    denySubject: ['recommended', 'new jobs', 'jobs for you', 'apply now', 'is hiring', 'discover jobs'],
-  },
-  {
-    senderIncludes: ['cutshort.io', 'hirect.in'],
-    allowSubject: ['you applied', 'application submitted', 'application received', 'application confirmation'],
-    denySubject: ['recommended', 'job alert', 'jobs for you', 'apply now', 'is hiring'],
-  },
-  {
-    senderIncludes: ['forms-receipts-noreply@google.com'],
-    allowSubject: ['your response for', 'has been recorded', 'response recorded', 'form response'],
-    denySubject: [],
-    denyBody: ['newsletter', 'unsubscribe'],
-  },
-];
-
-function isApplicationConfirmationInternal(subject: string, sender: string, body: string) {
-  const normalizedSubject = subject.toLowerCase().replace(/\s+/g, ' ').trim();
-  const normalizedSender = sender.toLowerCase();
-  const normalizedBody = body.toLowerCase().replace(/\s+/g, ' ').trim();
-
-  if (!normalizedSubject) return false;
-  if (globalDenySubject.some((phrase) => normalizedSubject.includes(phrase))) return false;
-  if (/\band\s+\d+\s+more\s+jobs?\b/.test(normalizedSubject)) return false;
-
-  const rule = portalFilterRules.find((item) =>
-    item.senderIncludes.some((senderPart) => normalizedSender.includes(senderPart)),
-  );
-  if (!rule) return false;
-  if (rule.denySubject.some((phrase) => normalizedSubject.includes(phrase))) return false;
-  if (rule.denyBody?.some((phrase) => normalizedBody.includes(phrase))) return false;
-
-  const subjectAllowed = rule.allowSubject.some((phrase) => normalizedSubject.includes(phrase));
-  if (!subjectAllowed) return false;
-
-  const confirmationSignals = [
-    'application submitted',
-    'application received',
-    'your application',
-    'you applied',
-    'submitted successfully',
-    'has been recorded',
-    'response for',
-  ];
-  const hasSignal = confirmationSignals.some(
-    (signal) => normalizedSubject.includes(signal) || normalizedBody.includes(signal),
-  );
-  return hasSignal;
-}
-
 async function upsertExtractedEmail(
   userId: string,
   email: Awaited<ReturnType<typeof fetchMessageText>>,
@@ -381,45 +342,36 @@ async function upsertExtractedEmail(
   );
   if (duplicateMessage.rows.length) return null;
 
-  if (!isApplicationConfirmation(email.subject, email.from)) return null;
+  if (!isApplicationConfirmation(email.subject, email.from, email.body)) return null;
 
   const extracted = await extractEmailData(email);
   if (!extracted.is_job_related || extracted.confidence < 0.4) return null;
   const role = normalizeCandidateField(extracted.role);
   const company = normalizeCandidateField(extracted.company);
-  const isGoogleFormSource = extracted.source === 'Google Form' || extracted.source === 'Google Forms';
+  const source = normalizePortalName(extracted.source, email);
+  const isGoogleDoc = source === 'Google Doc';
   if (!role) return null;
-  if (!company && !isGoogleFormSource) return null;
-
-  const recent = await query<{ id: string; company: string; job_title: string; status: string }>(
-    `select id, company, job_title, status
-     from applications
-     where user_id = $1
-     order by created_at desc
-     limit 10`,
-    [userId],
-  );
-
-  for (const job of recent.rows) {
-    const duplicate = await checkDuplicate(job, extracted);
-    if (duplicate.is_duplicate) {
-      const statusUpdate = await updateJobStatus(job, email.text);
-      if (statusUpdate.changed) {
-        await query('update applications set status = $1 where id = $2', [
-          mapStatus(statusUpdate.new_status),
-          job.id,
-        ]);
-      }
-      return null;
-    }
-  }
+  if (!company && !isGoogleDoc) return null;
 
   const appliedAt = extracted.applied_date
     ? new Date(extracted.applied_date).toISOString()
     : email.date
       ? new Date(email.date).toISOString()
       : new Date().toISOString();
+  const duplicateByCore = await query<{ id: string }>(
+    `select id
+     from applications
+     where user_id = $1
+       and lower(job_title) = lower($2)
+       and lower(company) = lower($3)
+       and date(applied_at) = date($4::timestamptz)
+     limit 1`,
+    [userId, role, company ?? 'Unknown - Google Doc', appliedAt],
+  );
+  if (duplicateByCore.rows.length) return null;
+
   const roleType = detectRoleType(email.text);
+
   const inserted = await query<{
     job_title: string;
     company: string;
@@ -437,12 +389,12 @@ async function upsertExtractedEmail(
     [
       userId,
       role,
-      company ?? 'Unknown - Google Form',
+      company ?? 'Unknown - Google Doc',
       roleType,
-      normalizePortalName(extracted.source),
+      source,
       `gmail:${email.id}`,
       appliedAt,
-      mapStatus(extracted.status),
+      'Applied',
       extracted,
       extracted.confidence,
       extracted.confidence < 0.7,
@@ -450,24 +402,29 @@ async function upsertExtractedEmail(
       email.id,
     ],
   );
+
   const app = inserted.rows[0];
   if (!app) return null;
 
   if (!deferSheetAppend) {
-    try {
-      await appendApplicationRow(userId, toSheetRow(app));
-    } catch (error) {
-      console.warn('Gmail sheet append skipped/failed:', error);
-    }
+    await appendApplicationRow(userId, toSheetRow(app));
   }
+
   return app;
 }
 
 async function extractEmailData(email: Awaited<ReturnType<typeof fetchMessageText>>): Promise<ExtractedJob> {
-  if (email.from.toLowerCase().includes('forms-receipts-noreply@google.com')) {
+  const senderEmail = parseSenderEmail(email.from);
+  if (senderEmail === 'forms-receipts-noreply@google.com') {
     const form = extractGoogleForm(email.subject, email.body, email.date);
     if (form) return form;
   }
+
+  if (isGoogleDomainSender(senderEmail) && hasGoogleDocKeywords(email.body)) {
+    const doc = extractGoogleDoc(email.subject, email.body, email.date);
+    if (doc) return doc;
+  }
+
   const subjectCompany = extractCompanyFromSubject(email.subject, email.from);
   const ai = await extractJobFromEmail(email.text, { company: subjectCompany });
   return {
@@ -478,50 +435,81 @@ async function extractEmailData(email: Awaited<ReturnType<typeof fetchMessageTex
 }
 
 function extractCompanyFromSubject(subject: string, from: string) {
-  if (!from.toLowerCase().includes('linkedin.com')) return null;
-  return subject
-    .match(/(?:application was sent to|you applied to|applied to)\s+(.+?)(?:\s+on|\s+via|$)/i)?.[1]
-    ?.replace(/^["']|["']$/g, '')
-    .trim() ?? null;
+  const senderEmail = parseSenderEmail(from);
+  if (senderEmail !== 'jobs-noreply@linkedin.com') return null;
+  return (
+    subject
+      .match(/(?:application was sent to|you applied to|applied to)\s+(.+?)(?:\s+on|\s+via|$)/i)?.[1]
+      ?.replace(/^["']|["']$/g, '')
+      .trim() ?? null
+  );
 }
 
 function extractGoogleForm(subject: string, body: string, date: string): ExtractedJob | null {
-  const title = subject.match(/(?:response for|response to)\s+(.+?)\s+(?:has been recorded|was recorded|recorded)/i)?.[1]?.trim();
+  const title = subject
+    .match(/(?:response for|response to)\s+(.+?)\s+(?:has been recorded|was recorded|recorded)/i)?.[1]
+    ?.trim();
   const valueFor = (labels: string[]) => {
     for (const label of labels) {
-      const match = body.match(new RegExp(`${label}\\s*[:\\-]?\\s*([^\\n\\r|]{2,100})`, 'i'));
+      const match = body.match(new RegExp(`${label}\\s*[:\\-]?\\s*([^\\n\\r|]{2,140})`, 'i'));
       if (match?.[1]) return match[1].trim();
     }
     return null;
   };
   const role = valueFor(['position', 'role', 'job title', 'applying for']) ?? title ?? null;
-  const company = valueFor(['company', 'organisation', 'organization', 'employer']) ?? 'Unknown - Google Form';
+  const company =
+    valueFor(['company', 'organisation', 'organization', 'employer']) ?? 'Unknown - Google Form';
   return {
     company,
     role,
     status: 'Applied',
-    applied_date: date ? new Date(date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    applied_date: date
+      ? new Date(date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
     source: 'Google Form',
     confidence: role && company !== 'Unknown - Google Form' ? 0.8 : 0.55,
     is_job_related: true,
   };
 }
 
+function extractGoogleDoc(subject: string, body: string, date: string): ExtractedJob | null {
+  const valueFor = (labels: string[]) => {
+    for (const label of labels) {
+      const match = body.match(new RegExp(`${label}\\s*[:\\-]?\\s*([^\\n\\r|]{2,140})`, 'i'));
+      if (match?.[1]) return match[1].trim();
+    }
+    return null;
+  };
+  const role = valueFor(['position', 'role', 'job title', 'applying for']) ?? subject ?? null;
+  const company =
+    valueFor(['company', 'organisation', 'organization', 'employer']) ?? 'Unknown - Google Doc';
+  return {
+    company,
+    role,
+    status: 'Applied',
+    applied_date: date
+      ? new Date(date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
+    source: 'Google Doc',
+    confidence: role && company !== 'Unknown - Google Doc' ? 0.72 : 0.5,
+    is_job_related: true,
+  };
+}
+
 function portalFromSender(from: string) {
-  const lower = from.toLowerCase();
-  const match = Object.entries(portalSenders).find(([sender]) => lower.includes(sender));
-  return (match?.[1] ?? 'Unknown') as ExtractedJob['source'];
+  const senderEmail = parseSenderEmail(from);
+  if (!senderEmail) return 'Unknown' as ExtractedJob['source'];
+  const matched = portalRules.find((rule) => rule.senders.includes(senderEmail));
+  if (!matched) return 'Unknown' as ExtractedJob['source'];
+  return matched.portal as ExtractedJob['source'];
 }
 
-function mapStatus(status: string) {
-  if (status === 'Offer') return 'Accepted';
-  if (status === 'Interview') return 'Shortlisted';
-  if (status === 'Rejected') return 'Rejected';
-  return 'Applied';
-}
-
-function normalizePortalName(source: string) {
+function normalizePortalName(source: string, email: Awaited<ReturnType<typeof fetchMessageText>>) {
   if (source === 'Google Form') return 'Google Forms';
+  if (source === 'Unknown') {
+    const senderPortal = portalFromSender(email.from);
+    return senderPortal === 'Google Form' ? 'Google Forms' : senderPortal;
+  }
   return source;
 }
 
@@ -543,23 +531,48 @@ function toSheetRow(app: {
   ];
 }
 
+function normalizeCandidateField(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  if (/^(unknown|n\/a|na|null|none)$/i.test(normalized)) return null;
+  return normalized;
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
-function normalizeCandidateField(value: string | null | undefined) {
-  if (!value) return null;
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) return null;
-  if (/^(unknown|n\/a|na|null|none)$/i.test(normalized)) return null;
-  if (
-    /(jobs?\s+similar|recommended\s+for\s+you|jobs?\s+for\s+you|job\s+alert|apply\s+now|and\s+\d+\s+more\s+jobs?)/i.test(
-      normalized,
-    )
-  ) {
-    return null;
-  }
-  return normalized;
+function parseSenderEmail(from: string) {
+  const bracketMatch = from.match(/<([^>]+)>/);
+  if (bracketMatch?.[1]) return bracketMatch[1].trim().toLowerCase();
+  const plainEmailMatch = from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return plainEmailMatch?.[0]?.toLowerCase() ?? '';
+}
+
+function isGoogleDomainSender(senderEmail: string) {
+  const domain = senderEmail.split('@')[1] ?? '';
+  return domain === 'google.com' || domain.endsWith('.google.com');
+}
+
+function hasGoogleDocKeywords(body: string) {
+  const normalizedBody = body.toLowerCase().replace(/\s+/g, ' ');
+  return googleDocBodyKeywords.some((keyword) => normalizedBody.includes(keyword));
+}
+
+async function insertWebhookLog(input: {
+  userId: string | null;
+  pubsubEmail: string;
+  sender: string | null;
+  subject: string | null;
+  result: string;
+}) {
+  await query(
+    `insert into webhook_logs
+      (user_id, pubsub_email, sender_email, subject, processing_result)
+     values ($1, $2, $3, $4, $5)`,
+    [input.userId, input.pubsubEmail, input.sender, input.subject, input.result],
+  );
 }

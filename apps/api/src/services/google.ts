@@ -5,12 +5,45 @@ import { query } from '../db/pool.js';
 export const SHEET_HEADERS = [
   'Job Title',
   'Company',
+  'Role Type',
   'Portal',
-  'Location',
-  'Job URL',
-  'Date Applied',
+  'Applied Date',
   'Status',
 ];
+
+const STATUS_COLUMN_INDEX = 5;
+const STATUS_COLOR_RULES = [
+  {
+    value: 'Applied',
+    backgroundColor: { red: 227 / 255, green: 242 / 255, blue: 253 / 255 },
+    textColor: { red: 21 / 255, green: 101 / 255, blue: 192 / 255 },
+  },
+  {
+    value: 'Saved',
+    backgroundColor: { red: 232 / 255, green: 234 / 255, blue: 246 / 255 },
+    textColor: { red: 40 / 255, green: 53 / 255, blue: 147 / 255 },
+  },
+  {
+    value: 'Shortlisted',
+    backgroundColor: { red: 255 / 255, green: 249 / 255, blue: 196 / 255 },
+    textColor: { red: 245 / 255, green: 127 / 255, blue: 23 / 255 },
+  },
+  {
+    value: 'Rejected',
+    backgroundColor: { red: 255 / 255, green: 205 / 255, blue: 210 / 255 },
+    textColor: { red: 183 / 255, green: 28 / 255, blue: 28 / 255 },
+  },
+  {
+    value: 'Accepted',
+    backgroundColor: { red: 200 / 255, green: 230 / 255, blue: 201 / 255 },
+    textColor: { red: 27 / 255, green: 94 / 255, blue: 32 / 255 },
+  },
+  {
+    value: 'In Progress',
+    backgroundColor: { red: 255 / 255, green: 224 / 255, blue: 178 / 255 },
+    textColor: { red: 230 / 255, green: 81 / 255, blue: 0 / 255 },
+  },
+] as const;
 
 export function getOAuthClient() {
   return new google.auth.OAuth2(
@@ -20,15 +53,17 @@ export function getOAuthClient() {
   );
 }
 
-export function getGoogleAuthUrl() {
+export function getGoogleAuthUrl(state?: string) {
   const client = getOAuthClient();
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
+    state,
     scope: [
       'openid',
       'email',
       'profile',
+      'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/drive.file',
     ],
@@ -50,6 +85,19 @@ export async function getAuthedSheetsClient(userId: string) {
   return google.sheets({ version: 'v4', auth });
 }
 
+export async function getAuthedGmailClient(userId: string) {
+  const result = await query<{ google_refresh_token: string }>(
+    'select google_refresh_token from users where id = $1',
+    [userId],
+  );
+  const refreshToken = result.rows[0]?.google_refresh_token;
+  if (!refreshToken) throw new Error('missing_google_refresh_token');
+
+  const auth = getOAuthClient();
+  auth.setCredentials({ refresh_token: refreshToken });
+  return google.gmail({ version: 'v1', auth });
+}
+
 export async function createApplicationSheet(userId: string) {
   const sheets = await getAuthedSheetsClient(userId);
   const created = await sheets.spreadsheets.create({
@@ -63,10 +111,12 @@ export async function createApplicationSheet(userId: string) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Applications!A1:G1',
+    range: 'Applications!A1:F1',
     valueInputOption: 'RAW',
     requestBody: { values: [SHEET_HEADERS] },
   });
+
+  await applyStatusFormatting(sheets, spreadsheetId);
 
   await query('update users set google_sheet_id = $1 where id = $2', [
     spreadsheetId,
@@ -79,22 +129,39 @@ export async function createApplicationSheet(userId: string) {
   };
 }
 
-export async function appendApplicationRow(userId: string, row: string[]) {
+async function ensureApplicationSheet(userId: string) {
   const user = await query<{ google_sheet_id: string | null }>(
     'select google_sheet_id from users where id = $1',
     [userId],
   );
-  const spreadsheetId = user.rows[0]?.google_sheet_id;
-  if (!spreadsheetId) throw new Error('missing_google_sheet_id');
+  return user.rows[0]?.google_sheet_id ?? (await createApplicationSheet(userId)).spreadsheetId;
+}
 
+export async function appendApplicationRow(userId: string, row: string[]) {
+  const spreadsheetId = await ensureApplicationSheet(userId);
   const sheets = await getAuthedSheetsClient(userId);
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Applications!A:G',
+    range: 'Applications!A:F',
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
   });
+  await applyStatusFormatting(sheets, spreadsheetId);
+}
+
+export async function appendApplicationRows(userId: string, rows: string[][]) {
+  if (!rows.length) return;
+  const spreadsheetId = await ensureApplicationSheet(userId);
+  const sheets = await getAuthedSheetsClient(userId);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: 'Applications!A:F',
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: rows },
+  });
+  await applyStatusFormatting(sheets, spreadsheetId);
 }
 
 export async function updateApplicationStatusRow(
@@ -115,16 +182,68 @@ export async function updateApplicationStatusRow(
   });
   const rows = values.data.values ?? [];
   const index = rows.findIndex((row) => {
-    const [title, company, , , url] = row;
-    return title === app.job_title && company === app.company && (!app.job_url || url === app.job_url);
+    const [title, company] = row;
+    return title === app.job_title && company === app.company;
   });
 
   if (index < 0) throw new Error('sheet_row_not_found');
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `Applications!G${index + 2}`,
+    range: `Applications!F${index + 2}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[app.status]] },
+  });
+  await applyStatusFormatting(sheets, spreadsheetId);
+}
+
+async function applyStatusFormatting(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+) {
+  const sheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const applicationSheet = sheet.data.sheets?.find((item) => item.properties?.title === 'Applications');
+  const sheetId = applicationSheet?.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) return;
+  const existingRuleCount = applicationSheet?.conditionalFormats?.length ?? 0;
+  const removeExistingRules = Array.from({ length: existingRuleCount }, (_, index) => ({
+    deleteConditionalFormatRule: {
+      sheetId,
+      index: existingRuleCount - index - 1,
+    },
+  }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        ...removeExistingRules,
+        ...STATUS_COLOR_RULES.map((color) => ({
+          addConditionalFormatRule: {
+            index: 0,
+            rule: {
+              ranges: [
+                {
+                  sheetId,
+                  startRowIndex: 1,
+                  startColumnIndex: STATUS_COLUMN_INDEX,
+                  endColumnIndex: STATUS_COLUMN_INDEX + 1,
+                },
+              ],
+              booleanRule: {
+                condition: {
+                  type: 'TEXT_EQ',
+                  values: [{ userEnteredValue: color.value }],
+                },
+                format: {
+                  backgroundColor: color.backgroundColor,
+                  textFormat: { foregroundColor: color.textColor },
+                },
+              },
+            },
+          },
+        })),
+      ],
+    },
   });
 }

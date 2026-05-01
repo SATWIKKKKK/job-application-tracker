@@ -11,20 +11,6 @@ import { applicationConfirmedEmail } from '../templates/emails.js';
 export const applicationsRouter = Router();
 applicationsRouter.use(requireAuth);
 
-const promotionLikePatterns = [
-  '%jobs similar to%',
-  '%new jobs for you%',
-  '%jobs for you%',
-  '%job alert%',
-  '%recommended for you%',
-  '%people also viewed%',
-  '%are you still interested%',
-  '%job suggestion%',
-  '%is hiring%',
-  '%apply now%',
-  '%and % more job%',
-];
-
 const logSchema = z.object({
   job_title: z.string().min(1),
   company: z.string().min(1),
@@ -44,7 +30,7 @@ const manualLogSchema = z.object({
   role_type: z.enum(['Full Time', 'Part Time', 'Internship', 'Contract', 'Stipend Based']),
   portal: z.string().min(1),
   applied_at: z.string().min(1),
-  status: z.enum(['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted']),
+  status: z.enum(['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted', 'In Progress']),
 });
 
 applicationsRouter.post('/log', async (req, res, next) => {
@@ -69,8 +55,8 @@ applicationsRouter.post('/log', async (req, res, next) => {
 
     const inserted = await query<JobApplication>(
       `insert into applications
-        (user_id, job_title, company, role_type, portal, job_url, location, applied_at, raw_data)
-       values ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9)
+        (user_id, job_title, company, role_type, portal, job_url, location, applied_at, status, raw_data)
+       values ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), 'Applied', $9)
        returning *`,
       [
         userId,
@@ -158,49 +144,93 @@ applicationsRouter.post('/manual', async (req, res, next) => {
 
 applicationsRouter.get('/', async (req, res, next) => {
   try {
-    await query(
-      `delete from applications a
-       where a.user_id = $1
-         and (
-           exists (
-             select 1
-             from unnest($2::text[]) pattern
-             where lower(a.job_title) like pattern
-           )
-           or (
-             coalesce(lower(a.company), '') in ('', 'unknown')
-             and exists (
-               select 1
-               from unnest($2::text[]) pattern
-               where lower(a.job_title) like pattern
-             )
-           )
-         )`,
-      [req.user!.id, promotionLikePatterns],
-    );
-
     const page = Math.max(Number(req.query.page ?? 1), 1);
     const pageSize = Math.min(Math.max(Number(req.query.page_size ?? 20), 1), 100);
     const offset = (page - 1) * pageSize;
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const search = `%${q}%`;
     const total = await query<{ count: string }>(
-      'select count(*) from applications where user_id = $1',
-      [req.user!.id],
+      `select count(*)
+       from applications
+       where user_id = $1
+         and (
+           $2 = ''
+           or job_title ilike $3
+           or company ilike $3
+         )`,
+      [req.user!.id, q, search],
     );
     const apps = await query<JobApplication>(
       `select * from applications
        where user_id = $1
+         and (
+           $2 = ''
+           or job_title ilike $3
+           or company ilike $3
+         )
        order by applied_at desc
-       limit $2 offset $3`,
-      [req.user!.id, pageSize, offset],
+       limit $4 offset $5`,
+      [req.user!.id, q, search, pageSize, offset],
     );
-    const filtered = apps.rows.filter((app) => !isPromotionalJobText(app.job_title));
+    const filtered = apps.rows.filter((app) => !isPromotionalJobText(app.job_title) && !isPromotionalJobText(app.raw_text));
 
     res.json({
       data: filtered,
       page,
       page_size: pageSize,
       total: Number(total.rows[0].count),
+      q,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+applicationsRouter.get('/stats', async (req, res, next) => {
+  try {
+    const stats = await query<{
+      total_applications: string;
+      this_week: string;
+      portals_active: string;
+    }>(
+      `select
+         count(*)::text as total_applications,
+         count(*) filter (where applied_at >= now() - interval '7 days')::text as this_week,
+         count(distinct lower(portal))::text as portals_active
+       from applications
+       where user_id = $1`,
+      [req.user!.id],
+    );
+
+    const row = stats.rows[0];
+    res.json({
+      total_applications: Number(row?.total_applications ?? 0),
+      this_week: Number(row?.this_week ?? 0),
+      portals_active: Number(row?.portals_active ?? 0),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+applicationsRouter.get('/heatmap', async (req, res, next) => {
+  try {
+    const rows = await query<{ date: string; count: string }>(
+      `select to_char(date(applied_at), 'YYYY-MM-DD') as date, count(*)::text as count
+       from applications
+       where user_id = $1
+         and applied_at >= (current_date - interval '83 days')
+       group by date(applied_at)
+       order by date(applied_at) asc`,
+      [req.user!.id],
+    );
+
+    res.json(
+      rows.rows.map((row) => ({
+        date: row.date,
+        count: Number(row.count),
+      })),
+    );
   } catch (error) {
     next(error);
   }
@@ -226,7 +256,7 @@ applicationsRouter.get('/scan-status', async (req, res, next) => {
 applicationsRouter.patch('/:id/status', async (req, res, next) => {
   try {
     const { status } = z
-      .object({ status: z.enum(['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted']) })
+      .object({ status: z.enum(['Applied', 'Saved', 'Shortlisted', 'Rejected', 'Accepted', 'In Progress']) })
       .parse(req.body);
     const updated = await query<JobApplication>(
       `update applications

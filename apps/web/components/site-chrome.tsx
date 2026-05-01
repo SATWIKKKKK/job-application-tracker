@@ -46,6 +46,13 @@ export function NavBar({ active }: { active?: string }) {
 }
 
 export function Footer({ active }: { active?: string }) {
+  const footerLinks = [
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'Terms of Service', href: '/terms' },
+    { label: 'Contact', href: 'mailto:privacy@jobtrackr.app' },
+    { label: 'Status', href: '/dashboard' },
+  ];
+
   return (
     <footer className="mt-auto border-t border-outline-variant/10 bg-slate-50">
       <div className="mx-auto flex max-w-screen-2xl flex-col items-center justify-between gap-8 px-8 py-12 md:flex-row">
@@ -53,13 +60,13 @@ export function Footer({ active }: { active?: string }) {
           JobTrackr
         </Link>
         <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-500">
-          {['Privacy Policy', 'Terms of Service', 'Contact', 'Status'].map((item) => (
+          {footerLinks.map((item) => (
             <Link
-              href={item === 'Status' ? '/dashboard' : '#'}
-              className={clsx('font-body opacity-80 transition-all hover:text-blue-600 hover:opacity-100', active === item && 'font-semibold text-primary')}
-              key={item}
+              href={item.href}
+              className={clsx('font-body opacity-80 transition-all hover:text-blue-600 hover:opacity-100', active === item.label && 'font-semibold text-primary')}
+              key={item.label}
             >
-              {item}
+              {item.label}
             </Link>
           ))}
         </div>

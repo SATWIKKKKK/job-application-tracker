@@ -140,8 +140,9 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
 
         <button
           type="button"
+          aria-disabled={!sheetId}
           title={sheetId ? 'Open your JobTrackr Google Sheet' : 'Reconnect Gmail to generate your sheet'}
-          onClick={openSheet}
+          onClick={sheetId ? openSheet : connectGmail}
           className={`shadow-ambient flex min-h-[104px] items-center justify-center gap-3 rounded-lg px-5 py-4 font-headline text-base font-bold transition-all ${
             sheetId
               ? 'hero-gradient text-on-primary hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,73,197,0.14)]'

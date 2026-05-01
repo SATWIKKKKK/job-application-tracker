@@ -88,9 +88,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
       const linked = await query<AuthUser>(
         `update users
          set google_refresh_token = coalesce($1, google_refresh_token),
-             name = coalesce(name, $2),
-             gmail_connected = false,
-             initial_scan_completed = false
+             name = coalesce(name, $2)
          where id = $3
          returning id, email, name`,
         [tokens.refresh_token ?? null, profile.data.name ?? null, existingUser.id],
@@ -103,9 +101,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
        on conflict (email)
        do update set
          name = excluded.name,
-         google_refresh_token = coalesce(excluded.google_refresh_token, users.google_refresh_token),
-         gmail_connected = false,
-         initial_scan_completed = false
+         google_refresh_token = coalesce(excluded.google_refresh_token, users.google_refresh_token)
        returning id, email, name`,
         [emailLower, profile.data.name ?? null, tokens.refresh_token ?? null],
       );
