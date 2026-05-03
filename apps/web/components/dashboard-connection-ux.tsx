@@ -29,6 +29,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   const [showSuccessModal, setShowSuccessModal] = useState(oauthJustCompleted && !user.gmail_connected);
   const [isScanning, setIsScanning] = useState(oauthJustCompleted && user.gmail_connected && !user.initial_scan_completed);
   const [scanFinishedMessage, setScanFinishedMessage] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
 
   useEffect(() => {
     if (!isScanning || scanCompleted) return;
@@ -68,12 +69,21 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   }, [gmailConnected]);
 
   async function acknowledgeConnection() {
+    setConnectionError('');
     const response = await fetch(`${API_URL}/api/gmail/acknowledge-connected`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
     });
-    if (!response.ok) return;
+    const data = await response.json().catch(() => null) as { gmail_connected?: boolean; message?: string } | null;
+    if (!response.ok || !data?.gmail_connected) {
+      setConnectionError(
+        data?.message === 'gmail_watch_setup_failed'
+          ? 'Inbox watch setup failed. Reconnect Gmail after the API Pub/Sub topic is fixed.'
+          : 'Inbox watch setup failed. Please try reconnecting Gmail.',
+      );
+      return;
+    }
     setGmailConnected(true);
     setShowSuccessModal(false);
     setIsScanning(true);
@@ -123,6 +133,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
           title="Gmail Successfully Connected"
           body="JobTrackr is now watching your inbox for job confirmation emails from LinkedIn, Naukri, Internshala, Unstop, Indeed, Wellfound, Glassdoor, and others. You can close this tab and forget about it."
           actionLabel="Got it"
+          error={connectionError}
           onAction={acknowledgeConnection}
         />
       ) : null}
@@ -217,11 +228,13 @@ function GmailSuccessModal({
   title,
   body,
   actionLabel,
+  error,
   onAction,
 }: {
   title: string;
   body: string;
   actionLabel: string;
+  error?: string;
   onAction: () => void;
 }) {
   return (
@@ -242,6 +255,7 @@ function GmailSuccessModal({
             </div>
           ))}
         </div>
+        {error ? <p className="rounded-DEFAULT bg-error-container px-4 py-3 text-sm font-semibold text-error">{error}</p> : null}
         <button
           type="button"
           onClick={onAction}

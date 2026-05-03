@@ -8,7 +8,16 @@ meRouter.use(requireAuth);
 meRouter.get('/', async (req, res, next) => {
   try {
     const user = await query(
-      `select id, email, name, google_sheet_id, gmail_connected, initial_scan_completed,
+      `select id,
+              email,
+              name,
+              google_sheet_id,
+              (
+                gmail_connected
+                and gmail_watch_history_id is not null
+                and (gmail_watch_expiration is null or gmail_watch_expiration > now())
+              ) as gmail_connected,
+              initial_scan_completed,
               initial_scan_found_count, plan, plan_type, plan_started_at, plan_expires_at, created_at
        from users where id = $1`,
       [req.user!.id],

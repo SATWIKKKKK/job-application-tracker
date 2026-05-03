@@ -27,12 +27,23 @@ gmailRouter.use(requireAuth);
 
 gmailRouter.post('/acknowledge-connected', async (req, res, next) => {
   try {
-    await query('update users set gmail_connected = true where id = $1', [req.user!.id]);
+    await startGmailWatch(req.user!.id);
+    await query(
+      `update users
+       set gmail_connected = true,
+           initial_scan_completed = false
+       where id = $1`,
+      [req.user!.id],
+    );
     void runInitialGmailScan(req.user!.id).catch((error) => {
       console.error('Initial Gmail scan failed:', error);
     });
-    res.json({ ok: true });
+    res.json({ ok: true, gmail_connected: true });
   } catch (error) {
+    await query('update users set gmail_connected = false where id = $1', [req.user!.id]);
+    if (error instanceof Error) {
+      return res.status(500).json({ message: 'gmail_watch_setup_failed', detail: error.message });
+    }
     next(error);
   }
 });
@@ -65,7 +76,13 @@ gmailRouter.get('/scan-status', async (req, res, next) => {
       initial_scan_found_count: number;
       gmail_connected: boolean;
     }>(
-      `select initial_scan_completed, initial_scan_found_count, gmail_connected
+      `select initial_scan_completed,
+              initial_scan_found_count,
+              (
+                gmail_connected
+                and gmail_watch_history_id is not null
+                and (gmail_watch_expiration is null or gmail_watch_expiration > now())
+              ) as gmail_connected
        from users where id = $1`,
       [req.user!.id],
     );
