@@ -105,6 +105,10 @@ applicationsRouter.post('/log', async (req, res, next) => {
 
 applicationsRouter.post('/manual', async (req, res, next) => {
   try {
+    const userPlan = await query<{ plan: string }>('select plan from users where id = $1', [req.user!.id]);
+    if (userPlan.rows[0]?.plan === 'free') {
+      return res.status(403).json({ message: 'upgrade_required' });
+    }
     const body = manualLogSchema.parse(req.body);
     const appliedAt = new Date(body.applied_at);
     if (Number.isNaN(appliedAt.getTime())) {
@@ -148,6 +152,10 @@ applicationsRouter.post('/manual', async (req, res, next) => {
 
 applicationsRouter.get('/', async (req, res, next) => {
   try {
+    const userPlan = await query<{ plan: string }>('select plan from users where id = $1', [req.user!.id]);
+    if (userPlan.rows[0]?.plan === 'free') {
+      return res.status(403).json({ message: 'upgrade_required' });
+    }
     const page = Math.max(Number(req.query.page ?? 1), 1);
     const pageSize = Math.min(Math.max(Number(req.query.page_size ?? 20), 1), 100);
     const offset = (page - 1) * pageSize;
@@ -227,6 +235,10 @@ applicationsRouter.get('/stats', async (req, res, next) => {
 
 applicationsRouter.get('/heatmap', async (req, res, next) => {
   try {
+    const userPlan = await query<{ plan: string }>('select plan from users where id = $1', [req.user!.id]);
+    if (userPlan.rows[0]?.plan === 'free') {
+      return res.status(403).json({ message: 'upgrade_required' });
+    }
     const days = Math.min(Math.max(Number(req.query.days ?? 84), 15), 120);
     const rows = await query<{ date: string; count: string }>(
       `select to_char(date(applied_at), 'YYYY-MM-DD') as date, count(*)::text as count

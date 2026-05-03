@@ -1,10 +1,12 @@
 import Link from 'next/link';
-import { Activity, BarChart3, BriefcaseBusiness, CalendarClock, Layers3 } from 'lucide-react';
+import { Activity, BriefcaseBusiness, CalendarClock, Layers3 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { User } from '../../lib/types';
 import { DashboardConnectionUX, OpenGoogleSheetButton } from '../../components/dashboard-connection-ux';
 import { DashboardLoadingGate } from '../../components/dashboard-loading-gate';
 import { DashboardShell } from '../../components/dashboard-shell';
+import { DashboardNotifications } from '../../components/dashboard-notifications';
+import { SeeAllApplicationsButton } from '../../components/see-all-applications-button';
 import { apiFetch } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +31,7 @@ export default async function DashboardPage({
     <DashboardShell user={user}>
       <DashboardLoadingGate label="Loading dashboard">
       <div className="space-y-8">
+        <DashboardNotifications />
         <section className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface md:text-4xl">
@@ -57,13 +60,7 @@ export default async function DashboardPage({
             />
           </div>
           <div>
-            <Link
-              href="/dashboard/applications"
-              className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high"
-            >
-              <BarChart3 className="h-4 w-4 text-primary" />
-              See All Applications
-            </Link>
+            <SeeAllApplicationsButton />
             <Link
               href="/dashboard/heatmap"
               className="ml-3 inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high"

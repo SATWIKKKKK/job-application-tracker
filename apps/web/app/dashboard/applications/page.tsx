@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowLeft, TableProperties } from 'lucide-react';
 import type { JobApplication, User } from '../../../lib/types';
 import { ApplicationsPageClient } from '../../../components/applications-page-client';
@@ -33,6 +34,10 @@ export default async function ApplicationsPage({
     apiFetch<{ user: User }>('/api/me'),
     apiFetch<ApplicationsResponse>(`/api/applications?${query.toString()}`),
   ]);
+
+  if (user.plan === 'free') {
+    redirect('/pricing?reason=upgrade_required');
+  }
 
   return (
     <DashboardShell user={user}>

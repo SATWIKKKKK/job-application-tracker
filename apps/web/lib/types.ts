@@ -1,4 +1,5 @@
 export type Plan = 'free' | 'pro';
+export type PlanType = 'monthly' | 'quarterly' | 'yearly';
 export type ApplicationStatus =
   | 'Applied'
   | 'Saved'
@@ -20,7 +21,10 @@ export interface User {
   initial_scan_completed: boolean;
   initial_scan_found_count: number;
   plan: Plan;
+  plan_type: PlanType | null;
+  plan_started_at: string | null;
   plan_expires_at: string | null;
+  days_remaining?: number | null;
   created_at: string;
 }
 

@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import { HelpCircle, LogOut, Search, Settings, UserCircle } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
+import { planDisplayName, usePlan } from './plan-context';
 
 export function DashboardTopBar({ user }: { user: User }) {
   const router = useRouter();
+  const { plan } = usePlan();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
@@ -59,6 +61,16 @@ export function DashboardTopBar({ user }: { user: User }) {
               <div className="px-3 py-3">
                 <p className="truncate text-sm font-bold text-on-surface">{user.name ?? 'JobTrackr user'}</p>
                 <p className="truncate text-xs text-on-surface-variant">{user.email}</p>
+                <div className="mt-2 rounded-md bg-surface-container px-3 py-2 text-xs font-semibold text-on-surface-variant">
+                  <p>{planDisplayName(plan)}</p>
+                  {plan.plan === 'free' ? (
+                    <Link href="/pricing" className="mt-1 inline-block text-primary">Upgrade</Link>
+                  ) : (
+                    <p className="mt-1">
+                      {plan.plan_expires_at ? `Expires ${new Date(plan.plan_expires_at).toLocaleDateString()}` : `${plan.days_remaining ?? 0} days remaining`}
+                    </p>
+                  )}
+                </div>
               </div>
               <Link href="/dashboard/settings" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container">
                 <Settings className="h-4 w-4 text-primary" /> Settings

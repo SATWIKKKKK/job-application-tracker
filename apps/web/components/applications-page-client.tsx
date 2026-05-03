@@ -8,6 +8,8 @@ import type { ApplicationStatus, JobApplication } from '../lib/types';
 import { API_URL } from '../lib/config';
 import { SUPPORTED_PORTALS } from '../lib/portals';
 import { ApplicationsResultsTable } from './applications-results-table';
+import { LockedFeature } from './locked-feature';
+import { usePlan } from './plan-context';
 
 const statusClass: Record<string, string> = {
   Applied: 'bg-[#E3F2FD] text-[#1565C0]',
@@ -51,6 +53,7 @@ export function ApplicationsPageClient({
   initialQuery: string;
 }) {
   const router = useRouter();
+  const { isPro } = usePlan();
   const [rows, setRows] = useState(initialRows);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [manualOpen, setManualOpen] = useState(false);
@@ -213,6 +216,10 @@ export function ApplicationsPageClient({
       </section>
 
       <section className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
+        {!isPro ? (
+          <LockedFeature title="Upgrade to Pro to unlock manual application logging" className="min-h-[260px]" />
+        ) : (
+        <>
         <button
           type="button"
           onClick={() => setManualOpen((open) => !open)}
@@ -315,6 +322,8 @@ export function ApplicationsPageClient({
             </div>
           </form>
         ) : null}
+        </>
+        )}
       </section>
     </div>
   );

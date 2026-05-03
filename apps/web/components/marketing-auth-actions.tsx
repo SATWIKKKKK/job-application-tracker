@@ -6,9 +6,11 @@ import { useState } from 'react';
 import { HelpCircle, LayoutDashboard, LogOut, Settings } from 'lucide-react';
 import type { SessionUser } from '../lib/auth';
 import { API_URL } from '../lib/config';
+import { planDisplayName, usePlan } from './plan-context';
 
 export function MarketingAuthActions({ user }: { user: SessionUser | null }) {
   const router = useRouter();
+  const { plan } = usePlan();
   const [open, setOpen] = useState(false);
 
   async function logout() {
@@ -50,6 +52,16 @@ export function MarketingAuthActions({ user }: { user: SessionUser | null }) {
           <div className="px-3 py-3">
             <p className="truncate text-sm font-bold text-on-surface">{user.name ?? 'JobTrackr user'}</p>
             <p className="truncate text-xs text-on-surface-variant">{user.email}</p>
+            <div className="mt-2 rounded-md bg-surface-container px-3 py-2 text-xs font-semibold text-on-surface-variant">
+              <p>{planDisplayName(plan)}</p>
+              {plan.plan === 'free' ? (
+                <Link href="/pricing" className="mt-1 inline-block text-primary">Upgrade</Link>
+              ) : (
+                <p className="mt-1">
+                  {plan.plan_expires_at ? `Expires ${new Date(plan.plan_expires_at).toLocaleDateString()}` : `${plan.days_remaining ?? 0} days remaining`}
+                </p>
+              )}
+            </div>
           </div>
           <Link href="/dashboard" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container">
             <LayoutDashboard className="h-4 w-4 text-primary" /> Dashboard
@@ -64,6 +76,11 @@ export function MarketingAuthActions({ user }: { user: SessionUser | null }) {
             <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>
+      ) : null}
+      {plan.plan === 'free' ? (
+        <Link href="/pricing" className="absolute -left-24 top-1 hidden rounded-full bg-primary-fixed px-4 py-2 text-xs font-bold text-primary md:block">
+          Upgrade
+        </Link>
       ) : null}
     </div>
   );

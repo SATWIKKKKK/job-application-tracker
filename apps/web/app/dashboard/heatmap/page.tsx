@@ -4,6 +4,7 @@ import { DashboardLoadingGate } from '../../../components/dashboard-loading-gate
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { HeatmapClient } from '../../../components/heatmap-client';
 import { apiFetch } from '../../../lib/api';
+import { LockedFeature } from '../../../components/locked-feature';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,13 +37,15 @@ export default async function HeatmapPage({
   const query = new URLSearchParams({ page: '1', page_size: '100' });
   if (selectedDate) query.set('date', selectedDate);
 
-  const [{ user }, heatmapData, applications] = await Promise.all([
-    apiFetch<{ user: User }>('/api/me'),
-    apiFetch<HeatmapEntry[]>(`/api/applications/heatmap?days=${range}`),
-    selectedDate
-      ? apiFetch<ApplicationsResponse>(`/api/applications?${query.toString()}`)
-      : Promise.resolve({ data: [], page: 1, page_size: 100, total: 0 } as ApplicationsResponse),
-  ]);
+  const { user } = await apiFetch<{ user: User }>('/api/me');
+  const [heatmapData, applications] = user.plan === 'free'
+    ? [[], { data: [], page: 1, page_size: 100, total: 0 } as ApplicationsResponse]
+    : await Promise.all([
+        apiFetch<HeatmapEntry[]>(`/api/applications/heatmap?days=${range}`),
+        selectedDate
+          ? apiFetch<ApplicationsResponse>(`/api/applications?${query.toString()}`)
+          : Promise.resolve({ data: [], page: 1, page_size: 100, total: 0 } as ApplicationsResponse),
+      ]);
 
   const cells = buildExactHeatmapCells(heatmapData, range);
   const selectedRows = selectedDate
@@ -52,6 +55,12 @@ export default async function HeatmapPage({
   return (
     <DashboardShell user={user}>
       <DashboardLoadingGate label="Loading heatmap">
+        {user.plan === 'free' ? (
+          <LockedFeature
+            title="Upgrade to Pro to unlock application heatmap"
+            className="min-h-[420px]"
+          />
+        ) : (
         <div className="space-y-8">
           <HeatmapClient
             cells={cells}
@@ -75,6 +84,7 @@ export default async function HeatmapPage({
             />
           </section>
         </div>
+        )}
       </DashboardLoadingGate>
     </DashboardShell>
   );

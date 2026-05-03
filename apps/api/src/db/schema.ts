@@ -15,6 +15,8 @@ export async function ensureDatabaseShape() {
       initial_scan_completed boolean not null default false,
       initial_scan_found_count integer not null default 0,
       plan text not null default 'free' check (plan in ('free', 'pro')),
+      plan_type text check (plan_type in ('monthly', 'quarterly', 'yearly')),
+      plan_started_at timestamptz,
       plan_expires_at timestamptz,
       created_at timestamptz not null default now()
     )
@@ -61,6 +63,17 @@ export async function ensureDatabaseShape() {
     )
   `);
   await query(`
+    create table if not exists notifications (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null references users(id) on delete cascade,
+      type text not null,
+      message text not null,
+      is_read boolean not null default false,
+      metadata jsonb,
+      created_at timestamptz not null default now()
+    )
+  `);
+  await query(`
     alter table users
       add column if not exists password_hash text,
       add column if not exists otp_hash text,
@@ -70,7 +83,15 @@ export async function ensureDatabaseShape() {
       add column if not exists gmail_watch_history_id text,
       add column if not exists gmail_watch_expiration timestamptz,
       add column if not exists initial_scan_completed boolean not null default false,
-      add column if not exists initial_scan_found_count integer not null default 0
+      add column if not exists initial_scan_found_count integer not null default 0,
+      add column if not exists plan_type text,
+      add column if not exists plan_started_at timestamptz
+  `);
+  await query('alter table users drop constraint if exists users_plan_type_check');
+  await query(`
+    alter table users
+      add constraint users_plan_type_check
+      check (plan_type is null or plan_type in ('monthly', 'quarterly', 'yearly'))
   `);
   await query(`
     alter table applications
@@ -93,6 +114,7 @@ export async function ensureDatabaseShape() {
   await query('create index if not exists idx_applications_needs_review on applications(needs_review) where needs_review = true');
   await query('create index if not exists idx_webhook_logs_created_at on webhook_logs(created_at desc)');
   await query('create index if not exists idx_webhook_logs_user_id on webhook_logs(user_id)');
+  await query('create index if not exists idx_notifications_user_read on notifications(user_id, is_read, created_at desc)');
   await query('drop index if exists idx_applications_user_source_unique');
   await query(`
     create unique index if not exists idx_applications_user_url_unique

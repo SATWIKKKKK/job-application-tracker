@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import Razorpay from 'razorpay';
-import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -21,21 +20,11 @@ const daysMap = {
   yearly: 365,
 } as const;
 
-const createOrderSchema = z
-  .object({
-    plan: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
-    amount: z.number().int().min(100).optional(),
-    currency: z.string().min(3).max(3).optional(),
-    receipt: z.string().min(1).max(40).optional(),
-  })
-  .refine((body) => body.plan || body.amount, { message: 'plan_or_amount_required' });
+type PlanType = keyof typeof amountMap;
 
-const verifyPaymentSchema = z.object({
-  razorpay_order_id: z.string().min(1),
-  razorpay_payment_id: z.string().min(1),
-  razorpay_signature: z.string().min(1),
-  plan: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
-});
+function isPlan(value: unknown): value is PlanType {
+  return value === 'monthly' || value === 'quarterly' || value === 'yearly';
+}
 
 function getRazorpay() {
   if (!config.razorpayKeyId || !config.razorpayKeySecret) {
@@ -49,24 +38,35 @@ function getRazorpay() {
 
 async function createOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = createOrderSchema.parse(req.body);
-    const plan = body.plan;
-    const amount = plan ? amountMap[plan] : body.amount!;
+    const plan = req.body?.plan;
+    if (!isPlan(plan)) return res.status(400).json({ message: 'missing_fields' });
+    const amount = amountMap[plan];
+    if (amount < 100) return res.status(400).json({ message: 'invalid_amount' });
     const order = await getRazorpay().orders.create({
       amount,
-      currency: body.currency ?? 'INR',
-      receipt: body.receipt ?? `jt_${Date.now()}`,
-      notes: { plan: plan ?? 'custom', user_id: req.user!.id },
+      currency: 'INR',
+      receipt: `rcpt_${plan}_${Date.now()}`.slice(0, 39),
+      notes: { plan, user_id: req.user!.id },
     });
     res.json({ order_id: order.id, amount: order.amount, currency: order.currency, plan });
   } catch (error) {
-    next(error);
+    console.error('Razorpay order creation failed:', error);
+    return res.status(500).json({ message: 'razorpay_order_failed' });
   }
 }
 
 async function verifyPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = verifyPaymentSchema.parse(req.body);
+    const body = req.body ?? {};
+    const plan = body.plan;
+    if (
+      !body.razorpay_order_id ||
+      !body.razorpay_payment_id ||
+      !body.razorpay_signature ||
+      !isPlan(plan)
+    ) {
+      return res.status(400).json({ message: 'missing_fields' });
+    }
 
     const expected = crypto
       .createHmac('sha256', config.razorpayKeySecret)
@@ -77,14 +77,15 @@ async function verifyPayment(req: Request, res: Response, next: NextFunction) {
       return res.status(400).json({ message: 'invalid_signature' });
     }
 
-    if (body.plan) {
-      await query(
-        `update users
-         set plan = 'pro', plan_expires_at = now() + ($1 || ' days')::interval
-         where id = $2`,
-        [daysMap[body.plan], req.user!.id],
-      );
-    }
+    await query(
+      `update users
+       set plan = 'pro',
+           plan_type = $1,
+           plan_started_at = now(),
+           plan_expires_at = now() + ($2 || ' days')::interval
+       where id = $3`,
+      [plan, daysMap[plan], req.user!.id],
+    );
     return res.json({ ok: true });
   } catch (error) {
     return next(error);

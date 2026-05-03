@@ -5,6 +5,7 @@ import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
 import { getOAuthReturnTo } from '../lib/oauth';
+import { planDisplayName, usePlan } from './plan-context';
 
 type ScanStatus = {
   initial_scan_completed: boolean;
@@ -21,6 +22,7 @@ function getBrowserAuthHeaders() {
 }
 
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
+  const { plan } = usePlan();
   const [gmailConnected, setGmailConnected] = useState(user.gmail_connected);
   const [scanCompleted, setScanCompleted] = useState(user.initial_scan_completed);
   const [foundCount, setFoundCount] = useState(user.initial_scan_found_count);
@@ -90,6 +92,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
           onClick={!gmailConnected ? connectGmail : undefined}
           className={`shadow-ambient w-full rounded-lg border-l-4 p-5 text-left ${banner.tone}`}
         >
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-3">
             <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${banner.dot} ${gmailConnected ? 'animate-pulse' : ''}`} />
             <div>
@@ -106,6 +109,11 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
                 </p>
               ) : null}
             </div>
+          </div>
+          <div className={`shrink-0 rounded-lg px-4 py-3 text-sm font-bold ${plan.plan === 'free' ? 'bg-surface-container text-on-surface-variant' : 'bg-primary-fixed text-primary'}`}>
+            <p>{planDisplayName(plan)}</p>
+            {plan.plan === 'pro' ? <p className="mt-1 text-xs font-semibold opacity-80">{plan.days_remaining ?? 0} days remaining</p> : null}
+          </div>
           </div>
         </button>
 

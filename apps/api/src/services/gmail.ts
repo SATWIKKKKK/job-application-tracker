@@ -390,6 +390,7 @@ async function upsertExtractedEmail(
   const isGoogleDoc = source === 'Google Doc';
   if (!role) return null;
   if (!company && !isGoogleDoc) return null;
+  if (!(await canSyncPortalForPlan(userId, source))) return null;
 
   const appliedAt = extracted.applied_date
     ? new Date(extracted.applied_date).toISOString()
@@ -451,6 +452,34 @@ async function upsertExtractedEmail(
   }
 
   return app;
+}
+
+async function canSyncPortalForPlan(userId: string, portal: string) {
+  const plan = await query<{ plan: string }>('select plan from users where id = $1', [userId]);
+  if (plan.rows[0]?.plan !== 'free') return true;
+  const existing = await query<{ portal: string }>(
+    'select distinct lower(portal) as portal from applications where user_id = $1',
+    [userId],
+  );
+  const used = new Set(existing.rows.map((row) => row.portal));
+  if (used.has(portal.toLowerCase()) || used.size < 3) return true;
+  await query(
+    `insert into notifications (user_id, type, message, metadata)
+     values ($1, 'skipped_portal', $2, $3)`,
+    [
+      userId,
+      'Upgrade to Pro to sync more than 3 portals',
+      { portal, reason: 'free_portal_limit' },
+    ],
+  );
+  await insertWebhookLog({
+    userId,
+    pubsubEmail: '',
+    sender: null,
+    subject: null,
+    result: `skipped_portal:${portal}`,
+  });
+  return false;
 }
 
 async function extractEmailData(email: Awaited<ReturnType<typeof fetchMessageText>>): Promise<ExtractedJob> {
