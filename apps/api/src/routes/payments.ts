@@ -9,7 +9,7 @@ export const paymentsRouter = Router();
 paymentsRouter.use(requireAuth);
 
 const amountMap = {
-  monthly: 100,
+  monthly: 4900,
   quarterly: 9900,
   yearly: 29900,
 } as const;

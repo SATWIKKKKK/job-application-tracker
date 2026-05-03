@@ -28,7 +28,7 @@ function getBrowserAuthHeaders() {
 
 const plans = [
   { id: 'free', title: 'Free Forever', price: '₹0', features: ['3 portal sources', 'Google Sheets sync', 'Basic dashboard'] },
-  { id: 'monthly', title: 'Pro Monthly', price: '₹1', suffix: '/ month', features: ['Unlimited sources', 'Priority sync', 'Heatmap insights', 'Manual logging'] },
+  { id: 'monthly', title: 'Pro Monthly', price: '₹49', suffix: '/ month', features: ['Unlimited sources', 'Priority sync', 'Heatmap insights', 'Manual logging'] },
   { id: 'quarterly', title: 'Pro Quarterly', price: '₹99', suffix: '/ 3 months', features: ['Everything in monthly', 'Lower monthly cost', 'Best starter value'] },
   { id: 'yearly', title: 'Pro Yearly', price: '₹299', suffix: '/ year', features: ['Everything in Pro', 'Best value', 'Save more'] },
 ] as const;
