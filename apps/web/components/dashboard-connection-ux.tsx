@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
+import { withBrowserAuth } from '../lib/browser-auth';
 import { getOAuthReturnTo } from '../lib/oauth';
 import { planDisplayName, usePlan } from './plan-context';
 
@@ -13,14 +14,6 @@ type ScanStatus = {
   initial_scan_found_count: number;
   gmail_connected: boolean;
 };
-
-function getBrowserAuthHeaders() {
-  const token = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('jt_token='))
-    ?.split('=')[1];
-  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
-}
 
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
   const router = useRouter();
@@ -38,8 +31,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     if (!isScanning || scanCompleted) return;
     const timer = window.setInterval(async () => {
       const response = await fetch(`${API_URL}/api/applications/scan-status`, {
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
+        ...withBrowserAuth(),
       });
       if (!response.ok) return;
       const status = (await response.json()) as ScanStatus;
@@ -64,9 +56,10 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
 
     void (async () => {
       const response = await fetch(`${API_URL}/api/gmail/sync-recent`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
+        ...withBrowserAuth({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        }),
       });
       const data = await response.json().catch(() => null) as { ok?: boolean; processed?: number } | null;
       if (!response.ok || !data?.ok) return;
@@ -97,9 +90,10 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   async function acknowledgeConnection() {
     setConnectionError('');
     const response = await fetch(`${API_URL}/api/gmail/acknowledge-connected`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
+      ...withBrowserAuth({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
     });
     const data = await response.json().catch(() => null) as { gmail_connected?: boolean; message?: string } | null;
     if (!response.ok || !data?.gmail_connected) {
@@ -195,8 +189,7 @@ export function OpenGoogleSheetButton({ user }: { user: User }) {
     const sheetTab = window.open('', '_blank');
     try {
       const response = await fetch(`${API_URL}/api/user/sheet-url`, {
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
+        ...withBrowserAuth(),
       });
       const data = (await response.json()) as {
         sheet_id: string | null;

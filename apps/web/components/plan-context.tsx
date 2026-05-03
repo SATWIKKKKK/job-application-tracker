@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { withBrowserAuth } from '../lib/browser-auth';
 import { API_URL } from '../lib/config';
 import type { Plan, PlanType } from '../lib/types';
 
@@ -32,22 +33,13 @@ const PlanContext = createContext<PlanContextValue>({
   refreshPlan: async () => undefined,
 });
 
-function getBrowserAuthHeaders() {
-  const token = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('jt_token='))
-    ?.split('=')[1];
-  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
-}
-
 export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [plan, setPlan] = useState<PlanState>(freePlan);
 
   async function refreshPlan() {
     try {
       const response = await fetch(`${API_URL}/api/user/me`, {
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
+        ...withBrowserAuth(),
       });
       if (!response.ok) {
         setPlan(freePlan);

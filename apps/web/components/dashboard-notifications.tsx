@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
+import { withBrowserAuth } from '../lib/browser-auth';
 import { API_URL } from '../lib/config';
 import { usePlan } from './plan-context';
 
@@ -11,14 +12,6 @@ type Notification = {
   type: string;
   message: string;
 };
-
-function getBrowserAuthHeaders() {
-  const token = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('jt_token='))
-    ?.split('=')[1];
-  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
-}
 
 export function DashboardNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -29,8 +22,7 @@ export function DashboardNotifications() {
   useEffect(() => {
     async function loadNotifications() {
       const response = await fetch(`${API_URL}/api/user/notifications`, {
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
+        ...withBrowserAuth(),
       });
       if (!response.ok) return;
       const data = (await response.json()) as { notifications: Notification[] };
@@ -38,10 +30,11 @@ export function DashboardNotifications() {
       setDowngrade(data.notifications.find((item) => item.type === 'plan_downgraded') ?? null);
       if (data.notifications.length) {
         await fetch(`${API_URL}/api/user/notifications/mark-read`, {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
-          body: JSON.stringify({ ids: data.notifications.map((item) => item.id) }),
+          ...withBrowserAuth({
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ids: data.notifications.map((item) => item.id) }),
+          }),
         });
       }
     }

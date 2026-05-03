@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { withBrowserAuth } from '../../lib/browser-auth';
 import { API_URL, RAZORPAY_KEY_ID } from '../../lib/config';
 import type { SessionUser } from '../../lib/auth';
 import { usePlan } from '../../components/plan-context';
@@ -17,14 +18,6 @@ declare global {
 
 type PaidPlan = 'monthly' | 'quarterly' | 'yearly';
 type PlanId = 'free' | PaidPlan;
-
-function getBrowserAuthHeaders() {
-  const token = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('jt_token='))
-    ?.split('=')[1];
-  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
-}
 
 const plans = [
   { id: 'free', title: 'Free Forever', price: '₹0', features: ['3 portal sources', 'Google Sheets sync', 'Basic dashboard'] },
@@ -64,15 +57,14 @@ export function PricingClient({
         setMessage('Razorpay key is missing. Add NEXT_PUBLIC_RAZORPAY_KEY_ID.');
         return;
       }
-      const authHeaders = getBrowserAuthHeaders();
       const response = await fetch(`${API_URL}/api/payments/create-order`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(authHeaders ?? {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({ plan }),
+        ...withBrowserAuth({
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ plan }),
+        }),
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -106,13 +98,13 @@ export function PricingClient({
         theme: { color: '#0049C5' },
         handler: async (payment: Record<string, string>) => {
           const verify = await fetch(`${API_URL}/api/payments/verify`, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              ...(authHeaders ?? {}),
-            },
-            credentials: 'include',
-            body: JSON.stringify({ ...payment, plan }),
+            ...withBrowserAuth({
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({ ...payment, plan }),
+            }),
           });
           if (!verify.ok) {
             setMessage('Payment verification failed. Please contact support if money was deducted.');

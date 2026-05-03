@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ArrowRight, FileSpreadsheet, Puzzle } from 'lucide-react';
+import { withBrowserAuth } from '../../../lib/browser-auth';
 import { API_URL } from '../../../lib/config';
 import { getOAuthReturnTo } from '../../../lib/oauth';
 
@@ -14,9 +15,10 @@ export function SetupClient() {
     setMessage('');
     try {
       const response = await fetch(`${API_URL}/api/sheets/setup`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
+        ...withBrowserAuth({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        }),
       });
       const data = await response.json();
       if (!response.ok) {

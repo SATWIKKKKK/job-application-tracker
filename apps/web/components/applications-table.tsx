@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { BadgeCheck, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, Globe2, Plus, Tags } from 'lucide-react';
 import type { JobApplication, ApplicationStatus } from '../lib/types';
+import { withBrowserAuth } from '../lib/browser-auth';
 import { API_URL } from '../lib/config';
 import { SUPPORTED_PORTALS } from '../lib/portals';
 
@@ -52,10 +53,11 @@ export function ApplicationsTable({ applications }: { applications: JobApplicati
   async function updateStatus(app: JobApplication, status: ApplicationStatus) {
     setRows((current) => current.map((item) => (item.id === app.id ? { ...item, status } : item)));
     const response = await fetch(`${API_URL}/api/applications/${app.id}/status`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status }),
+      ...withBrowserAuth({
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      }),
     });
     if (!response.ok) {
       setRows((current) => current.map((item) => (item.id === app.id ? app : item)));
@@ -69,10 +71,11 @@ export function ApplicationsTable({ applications }: { applications: JobApplicati
     setManualError('');
     try {
       const response = await fetch(`${API_URL}/api/applications/manual`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(manualForm),
+        ...withBrowserAuth({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(manualForm),
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
