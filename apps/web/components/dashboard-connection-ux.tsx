@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
@@ -22,6 +23,7 @@ function getBrowserAuthHeaders() {
 }
 
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
+  const router = useRouter();
   const { plan } = usePlan();
   const [gmailConnected, setGmailConnected] = useState(user.gmail_connected);
   const [scanCompleted, setScanCompleted] = useState(user.initial_scan_completed);
@@ -30,6 +32,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
   const [isScanning, setIsScanning] = useState(oauthJustCompleted && user.gmail_connected && !user.initial_scan_completed);
   const [scanFinishedMessage, setScanFinishedMessage] = useState(false);
   const [connectionError, setConnectionError] = useState('');
+  const [recentSyncMessage, setRecentSyncMessage] = useState('');
 
   useEffect(() => {
     if (!isScanning || scanCompleted) return;
@@ -50,6 +53,29 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     }, 3000);
     return () => window.clearInterval(timer);
   }, [isScanning, scanCompleted]);
+
+  useEffect(() => {
+    if (!user.has_google_auth) return;
+    const storageKey = `jobtrackr:gmail-sync:${user.id}`;
+    const now = Date.now();
+    const lastSync = Number(window.sessionStorage.getItem(storageKey) ?? '0');
+    if (Number.isFinite(lastSync) && now - lastSync < 5 * 60 * 1000) return;
+    window.sessionStorage.setItem(storageKey, String(now));
+
+    void (async () => {
+      const response = await fetch(`${API_URL}/api/gmail/sync-recent`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json', ...getBrowserAuthHeaders() },
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; processed?: number } | null;
+      if (!response.ok || !data?.ok) return;
+      if ((data.processed ?? 0) > 0) {
+        setRecentSyncMessage(`Synced ${data.processed} recent Gmail confirmation${data.processed === 1 ? '' : 's'}.`);
+        router.refresh();
+      }
+    })();
+  }, [router, user.has_google_auth, user.id]);
 
   const banner = useMemo(() => {
     if (!gmailConnected) {
@@ -116,6 +142,11 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
               {scanCompleted && foundCount > 0 ? (
                 <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
                   <MailCheck className="h-4 w-4" /> Found {foundCount} past applications logged to your Sheet
+                </p>
+              ) : null}
+              {recentSyncMessage ? (
+                <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                  <MailCheck className="h-4 w-4" /> {recentSyncMessage}
                 </p>
               ) : null}
             </div>

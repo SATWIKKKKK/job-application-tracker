@@ -17,6 +17,7 @@ export interface User {
   email: string;
   name: string | null;
   google_sheet_id: string | null;
+  has_google_auth?: boolean;
   gmail_connected: boolean;
   initial_scan_completed: boolean;
   initial_scan_found_count: number;

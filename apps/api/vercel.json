@@ -14,7 +14,7 @@
   "crons": [
     {
       "path": "/api/cron/gmail-catchup",
-      "schedule": "0 2 * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/gmail-renew",

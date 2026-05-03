@@ -12,6 +12,7 @@ meRouter.get('/', async (req, res, next) => {
               email,
               name,
               google_sheet_id,
+              (google_refresh_token is not null) as has_google_auth,
               (
                 gmail_connected
                 and gmail_watch_history_id is not null
