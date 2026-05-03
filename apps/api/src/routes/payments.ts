@@ -36,6 +36,27 @@ function getRazorpay() {
   });
 }
 
+function logRazorpayError(error: unknown) {
+  const details = error as {
+    message?: string;
+    statusCode?: number;
+    error?: {
+      code?: string;
+      description?: string;
+      field?: string;
+      reason?: string;
+      source?: string;
+      step?: string;
+    };
+  };
+
+  console.error('Razorpay order creation failed', {
+    message: details?.message,
+    statusCode: details?.statusCode,
+    razorpay: details?.error,
+  });
+}
+
 async function createOrder(req: Request, res: Response, next: NextFunction) {
   try {
     const plan = req.body?.plan;
@@ -50,7 +71,7 @@ async function createOrder(req: Request, res: Response, next: NextFunction) {
     });
     res.json({ order_id: order.id, amount: order.amount, currency: order.currency, plan });
   } catch (error) {
-    console.error('Razorpay order creation failed:', error);
+    logRazorpayError(error);
     return res.status(500).json({ message: 'razorpay_order_failed' });
   }
 }
