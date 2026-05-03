@@ -1,106 +1,68 @@
-import { BarChart3, Globe2, Mail, Puzzle, RefreshCw } from 'lucide-react';
+import { Activity, BarChart3, FileSpreadsheet, MailCheck, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Footer, NavBar } from '../../components/site-chrome';
 
-const featureImage =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuC5VbssfSk7STp5_XsUYdYyZ_ZTSd7l6cCBo2Hs7ptjbrdtgaaTQ3pCB5s591PFAj86R4a9iISCEah9uLmCF4Mp9z25E07wsV-3ANJ3aMwckZe1hInq2wSrFxx_963Rsi-FfvAHuIFzM7NiONI9Awb7wPSLlhM8VNGlzqtFf1BA3g6LzqNttqs7aWfvwi8lHroqM-VYmSDdGrJqJAWSulux1anOGRYmayyKsiTSFDXrh_hj8rg_vR0nf0hGIP4TSgmoD-30eCjrmJP_';
+const features = [
+  {
+    icon: MailCheck,
+    title: 'Email-based capture',
+    text: 'JobTrackr detects application confirmation emails from supported portals and Google Forms instead of relying on an extension.',
+  },
+  {
+    icon: FileSpreadsheet,
+    title: 'Google Sheets sync',
+    text: 'Every confirmed application is appended to your own Google Sheet so your data stays portable.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Dashboard tracking',
+    text: 'Review applications, update status, search by company, and manually add roles that do not send confirmation emails.',
+  },
+  {
+    icon: Activity,
+    title: 'Activity heatmap',
+    text: 'See daily application activity and click any date to inspect the applications submitted that day.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Noise filtering',
+    text: 'Promotional job alerts and recommendations are filtered out so your tracker focuses on actual applications.',
+  },
+] as const;
 
 export default function FeaturesPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <NavBar active="Features" />
-      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-6 pb-24 pt-32 md:px-12">
-        <div className="mb-16 max-w-3xl md:mb-20">
-          <h1 className="text-balance font-display text-4xl font-bold leading-[1.08] tracking-[-0.04em] text-on-surface md:text-6xl">
-            Everything you need to track smarter
+      <main className="mx-auto w-full max-w-screen-xl flex-1 px-6 pb-20 pt-28 md:px-8">
+        <div className="mb-10 max-w-3xl">
+          <h1 className="text-balance font-display text-4xl font-bold leading-tight tracking-tight text-on-surface md:text-5xl">
+            Automatic tracking from the emails you already receive
           </h1>
-          <p className="mt-6 font-body text-lg leading-8 text-on-surface-variant md:text-xl">
-            One dashboard. All your applications. Zero manual entry.
+          <p className="mt-5 text-base leading-7 text-on-surface-variant md:text-lg">
+            No browser extension. No one-click capture. JobTrackr watches confirmation emails, extracts clean application details, and keeps your job hunt organized.
           </p>
         </div>
 
-        <div className="grid auto-rows-[220px] grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
-          <Link href="/auth/signin" className="shadow-ambient group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-8 transition-colors hover:bg-primary-fixed/30 md:col-span-2">
-            <div className="relative z-10">
-              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Puzzle className="h-6 w-6" />
+        <div className="grid gap-5 md:grid-cols-2">
+          {features.map((feature) => (
+            <div key={feature.title} className="rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-6 shadow-sm">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary-fixed text-primary">
+                <feature.icon className="h-5 w-5" />
               </div>
-              <h2 className="mb-3 font-headline text-2xl font-bold tracking-tight text-on-surface md:text-3xl">One-Click Capture</h2>
-              <p className="max-w-sm font-body leading-7 text-on-surface-variant">
-                Save jobs from any site directly into your pipeline with our seamless browser extension.
-              </p>
+              <h2 className="font-headline text-xl font-bold text-on-surface">{feature.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-on-surface-variant">{feature.text}</p>
             </div>
-            <div className="absolute -bottom-10 -right-10 h-3/4 w-3/4 rounded-full bg-gradient-to-tl from-primary-container/20 to-transparent blur-3xl transition-transform duration-700 group-hover:scale-110" />
-            <div
-              aria-label="Browser extension popup floating over clean application windows"
-              className="absolute -bottom-6 -right-8 h-64 w-2/3 rounded-xl border border-outline-variant/20 bg-cover bg-center drop-shadow-2xl transition-transform duration-500 group-hover:-translate-x-2 group-hover:-translate-y-2"
-              style={{ backgroundImage: `url(${featureImage})` }}
-            />
-          </Link>
+          ))}
+        </div>
 
-          <Link href="/dashboard/setup" className="group relative col-span-1 row-span-2 flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low p-8 transition-colors hover:bg-secondary-fixed/60">
-            <div className="relative z-10">
-              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-                <RefreshCw className="h-6 w-6" />
-              </div>
-              <h2 className="mb-3 font-headline text-2xl font-bold tracking-tight text-on-surface">Auto-Sync to Google Sheets</h2>
-              <p className="font-body leading-7 text-on-surface-variant">Keep your data portable and accessible anywhere, automatically.</p>
-            </div>
-            <div className="mt-8 flex flex-grow flex-col justify-end opacity-80 transition-opacity group-hover:opacity-100">
-              <div className="mb-3 flex h-12 w-full items-center rounded-lg border border-outline-variant/20 bg-surface-container-lowest px-4 shadow-sm">
-                <div className="mr-3 h-4 w-4 rounded-full bg-primary/20" />
-                <div className="h-2 w-1/2 rounded-full bg-surface-dim" />
-              </div>
-              <div className="mx-auto mb-3 h-6 w-0.5 bg-outline-variant/40" />
-              <div className="flex h-12 w-full items-center rounded-lg border border-outline-variant/20 bg-surface-container-lowest px-4 shadow-sm">
-                <BarChart3 className="mr-3 h-5 w-5 text-green-600" />
-                <div className="h-2 w-2/3 rounded-full bg-surface-dim" />
-              </div>
-            </div>
-          </Link>
-
-          <SmallFeature icon={<Globe2 />} title="20+ Portals" text="Works seamlessly with LinkedIn, Indeed, Greenhouse, and more." tone="tertiary" />
-          <SmallFeature icon={<Mail />} title="Email Confirmations" text="Automatically parse application receipts from your inbox." tone="primary" />
-
-          <Link href="/dashboard" className="col-span-1 row-span-1 flex items-center justify-between overflow-hidden rounded-xl bg-surface-container-low p-6 transition-colors hover:bg-primary-fixed/40 md:col-span-2">
-            <div className="relative z-10 w-1/2">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-                <BarChart3 className="h-5 w-5" />
-              </div>
-              <h3 className="mb-2 font-headline text-xl font-bold tracking-tight text-on-surface">Status Dashboard</h3>
-              <p className="font-body text-sm leading-6 text-on-surface-variant">Visualize your funnel from applied to offer.</p>
-            </div>
-            <div className="flex h-24 w-1/2 items-end justify-end gap-2 opacity-80">
-              <div className="h-[40%] w-8 rounded-t-md bg-surface-variant" />
-              <div className="h-[70%] w-8 rounded-t-md bg-primary-fixed-dim" />
-              <div className="h-full w-8 rounded-t-md bg-primary" />
-            </div>
+        <div className="mt-10">
+          <Link href="/auth/signin" className="hero-gradient inline-flex rounded-full px-6 py-3 text-sm font-bold text-on-primary">
+            Start Tracking
           </Link>
         </div>
       </main>
-      <Footer />
+      <Footer active="Features" />
     </div>
-  );
-}
-
-function SmallFeature({
-  icon,
-  title,
-  text,
-  tone,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-  tone: 'primary' | 'tertiary';
-}) {
-  return (
-    <Link href={tone === 'primary' ? '/auth/signin' : '/sites'} className="shadow-ambient col-span-1 row-span-1 flex flex-col justify-center rounded-xl bg-surface-container-lowest p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-primary-fixed/20 hover:shadow-lg">
-      <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-full ${tone === 'primary' ? 'bg-primary/10 text-primary' : 'bg-tertiary-container/10 text-tertiary'}`}>
-        {icon}
-      </div>
-      <h3 className="mb-2 font-headline text-xl font-bold tracking-tight text-on-surface">{title}</h3>
-      <p className="font-body text-sm leading-6 text-on-surface-variant">{text}</p>
-    </Link>
   );
 }

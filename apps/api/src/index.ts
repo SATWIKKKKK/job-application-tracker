@@ -39,6 +39,7 @@ app.use('/api/me', meRouter);
 app.use('/api/sheets', sheetsRouter);
 app.use('/api/applications', applicationsRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api', paymentsRouter);
 app.use('/api/user', userRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import Razorpay from 'razorpay';
 import { z } from 'zod';
 import { config } from '../config.js';
@@ -21,6 +21,22 @@ const daysMap = {
   yearly: 365,
 } as const;
 
+const createOrderSchema = z
+  .object({
+    plan: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
+    amount: z.number().int().min(100).optional(),
+    currency: z.string().min(3).max(3).optional(),
+    receipt: z.string().min(1).max(40).optional(),
+  })
+  .refine((body) => body.plan || body.amount, { message: 'plan_or_amount_required' });
+
+const verifyPaymentSchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+  plan: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
+});
+
 function getRazorpay() {
   if (!config.razorpayKeyId || !config.razorpayKeySecret) {
     throw new Error('razorpay_not_configured');
@@ -31,33 +47,26 @@ function getRazorpay() {
   });
 }
 
-paymentsRouter.post('/create-order', async (req, res, next) => {
+async function createOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const { plan } = z
-      .object({ plan: z.enum(['monthly', 'quarterly', 'yearly']) })
-      .parse(req.body);
+    const body = createOrderSchema.parse(req.body);
+    const plan = body.plan;
+    const amount = plan ? amountMap[plan] : body.amount!;
     const order = await getRazorpay().orders.create({
-      amount: amountMap[plan],
-      currency: 'INR',
-      receipt: `jt_${Date.now()}`,
-      notes: { plan, user_id: req.user!.id },
+      amount,
+      currency: body.currency ?? 'INR',
+      receipt: body.receipt ?? `jt_${Date.now()}`,
+      notes: { plan: plan ?? 'custom', user_id: req.user!.id },
     });
-    res.json({ order_id: order.id, amount: order.amount, plan });
+    res.json({ order_id: order.id, amount: order.amount, currency: order.currency, plan });
   } catch (error) {
     next(error);
   }
-});
+}
 
-paymentsRouter.post('/verify', async (req, res, next) => {
+async function verifyPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = z
-      .object({
-        razorpay_order_id: z.string(),
-        razorpay_payment_id: z.string(),
-        razorpay_signature: z.string(),
-        plan: z.enum(['monthly', 'quarterly', 'yearly']),
-      })
-      .parse(req.body);
+    const body = verifyPaymentSchema.parse(req.body);
 
     const expected = crypto
       .createHmac('sha256', config.razorpayKeySecret)
@@ -68,14 +77,20 @@ paymentsRouter.post('/verify', async (req, res, next) => {
       return res.status(400).json({ message: 'invalid_signature' });
     }
 
-    await query(
-      `update users
-       set plan = 'pro', plan_expires_at = now() + ($1 || ' days')::interval
-       where id = $2`,
-      [daysMap[body.plan], req.user!.id],
-    );
+    if (body.plan) {
+      await query(
+        `update users
+         set plan = 'pro', plan_expires_at = now() + ($1 || ' days')::interval
+         where id = $2`,
+        [daysMap[body.plan], req.user!.id],
+      );
+    }
     return res.json({ ok: true });
   } catch (error) {
     return next(error);
   }
-});
+}
+
+paymentsRouter.post('/create-order', createOrder);
+paymentsRouter.post('/verify', verifyPayment);
+paymentsRouter.post('/verify-payment', verifyPayment);

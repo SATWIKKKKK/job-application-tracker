@@ -7,10 +7,10 @@ export default function PricingPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
       <NavBar active="Pricing" />
-      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-6 pb-24 pt-32 md:px-8">
-        <div className="mb-12 text-center">
-          <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] md:text-5xl">Simple, honest pricing</h1>
-          <p className="mt-5 text-lg text-on-surface-variant md:text-xl">Start free with 3 integrations. Scale when you need more.</p>
+      <main className="mx-auto w-full max-w-screen-xl flex-1 px-6 pb-16 pt-28 md:px-8">
+        <div className="mb-8 text-center">
+          <h1 className="font-headline text-3xl font-extrabold tracking-tight md:text-4xl">Simple, honest pricing</h1>
+          <p className="mt-3 text-base text-on-surface-variant">Start free with 3 sources. Scale when you need more.</p>
         </div>
         <PricingClient />
       </main>

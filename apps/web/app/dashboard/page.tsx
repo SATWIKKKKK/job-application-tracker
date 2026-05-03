@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Activity, BarChart3, BriefcaseBusiness, CalendarClock, Layers3 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { User } from '../../lib/types';
-import { DashboardConnectionUX } from '../../components/dashboard-connection-ux';
+import { DashboardConnectionUX, OpenGoogleSheetButton } from '../../components/dashboard-connection-ux';
 import { DashboardLoadingGate } from '../../components/dashboard-loading-gate';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { apiFetch } from '../../lib/api';
@@ -30,9 +30,12 @@ export default async function DashboardPage({
       <DashboardLoadingGate label="Loading dashboard">
       <div className="space-y-8">
         <section className="space-y-4">
-          <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface md:text-4xl">
-            Dashboard
-          </h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface md:text-4xl">
+              Dashboard
+            </h1>
+            <OpenGoogleSheetButton user={user} />
+          </div>
           <p className="text-sm text-on-surface-variant">
             Automatic tracking is primary. Manual logging stays available as a backup on the applications page.
           </p>

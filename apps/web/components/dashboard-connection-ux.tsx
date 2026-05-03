@@ -22,13 +22,11 @@ function getBrowserAuthHeaders() {
 
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
   const [gmailConnected, setGmailConnected] = useState(user.gmail_connected);
-  const [sheetId, setSheetId] = useState(user.google_sheet_id);
   const [scanCompleted, setScanCompleted] = useState(user.initial_scan_completed);
   const [foundCount, setFoundCount] = useState(user.initial_scan_found_count);
   const [showSuccessModal, setShowSuccessModal] = useState(oauthJustCompleted && !user.gmail_connected);
   const [isScanning, setIsScanning] = useState(oauthJustCompleted && user.gmail_connected && !user.initial_scan_completed);
   const [scanFinishedMessage, setScanFinishedMessage] = useState(false);
-  const [sheetError, setSheetError] = useState('');
 
   useEffect(() => {
     if (!isScanning || scanCompleted) return;
@@ -84,50 +82,9 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     window.location.href = `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
   }
 
-  async function openSheet() {
-    setSheetError('');
-    const sheetTab = window.open('', '_blank');
-    try {
-      const response = await fetch(`${API_URL}/api/user/sheet-url`, {
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
-      });
-      const data = (await response.json()) as {
-        sheet_id: string | null;
-        sheet_url: string | null;
-        requires_reconnect?: boolean;
-        reason?: string;
-      };
-      if (!response.ok) {
-        sheetTab?.close();
-        if (data.requires_reconnect) {
-          connectGmail();
-          return;
-        }
-        setSheetError('Could not open your Google Sheet. Please try again.');
-        return;
-      }
-      if (!data.sheet_url) {
-        sheetTab?.close();
-        if (data.requires_reconnect) {
-          connectGmail();
-          return;
-        }
-        setSheetError('Sheet is not ready yet. Reconnect Gmail once to generate it.');
-        return;
-      }
-      setSheetId(data.sheet_id);
-      if (sheetTab) sheetTab.location.href = data.sheet_url;
-      else window.open(data.sheet_url, '_blank', 'noopener,noreferrer');
-    } catch {
-      sheetTab?.close();
-      connectGmail();
-    }
-  }
-
   return (
     <>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="grid gap-4">
         <button
           type="button"
           onClick={!gmailConnected ? connectGmail : undefined}
@@ -152,28 +109,7 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
           </div>
         </button>
 
-        <button
-          type="button"
-          aria-disabled={!sheetId}
-          title={sheetId ? 'Open your JobTrackr Google Sheet' : 'Reconnect Gmail to generate your sheet'}
-          onClick={sheetId ? openSheet : connectGmail}
-          className={`shadow-ambient flex min-h-[104px] items-center justify-center gap-3 rounded-lg px-5 py-4 font-headline text-base font-bold transition-all ${
-            sheetId
-              ? 'hero-gradient text-on-primary hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,73,197,0.14)]'
-              : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-          }`}
-        >
-          <GoogleSheetsIcon />
-          <span>Open My Google Sheet</span>
-          <ExternalLink className="h-4 w-4" />
-        </button>
       </div>
-      {sheetError ? (
-        <p className="mt-2 rounded-DEFAULT bg-surface-container px-3 py-2 text-sm text-on-surface-variant">
-          {sheetError}
-        </p>
-      ) : null}
-
       {showSuccessModal ? (
         <GmailSuccessModal
           title="Gmail Successfully Connected"
@@ -192,6 +128,68 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
         />
       ) : null}
     </>
+  );
+}
+
+export function OpenGoogleSheetButton({ user }: { user: User }) {
+  const [sheetId, setSheetId] = useState(user.google_sheet_id);
+  const [error, setError] = useState('');
+
+  function connectGmail() {
+    const returnTo = getOAuthReturnTo();
+    window.location.href = `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
+  }
+
+  async function openSheet() {
+    setError('');
+    const sheetTab = window.open('', '_blank');
+    try {
+      const response = await fetch(`${API_URL}/api/user/sheet-url`, {
+        credentials: 'include',
+        headers: getBrowserAuthHeaders(),
+      });
+      const data = (await response.json()) as {
+        sheet_id: string | null;
+        sheet_url: string | null;
+        requires_reconnect?: boolean;
+      };
+      if (!response.ok || !data.sheet_url) {
+        sheetTab?.close();
+        if (data.requires_reconnect) {
+          connectGmail();
+          return;
+        }
+        setError('Sheet is not ready yet.');
+        return;
+      }
+      setSheetId(data.sheet_id);
+      if (sheetTab) sheetTab.location.href = data.sheet_url;
+      else window.open(data.sheet_url, '_blank', 'noopener,noreferrer');
+    } catch {
+      sheetTab?.close();
+      connectGmail();
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2 sm:items-end">
+      <button
+        type="button"
+        aria-disabled={!sheetId}
+        title={sheetId ? 'Open your JobTrackr Google Sheet' : 'Reconnect Gmail to generate your sheet'}
+        onClick={sheetId ? openSheet : connectGmail}
+        className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 font-headline text-sm font-bold transition-all ${
+          sheetId
+            ? 'hero-gradient text-on-primary hover:shadow-[0_8px_30px_rgba(0,73,197,0.14)]'
+            : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+        }`}
+      >
+        <GoogleSheetsIcon />
+        <span>Open My Google Sheet</span>
+        <ExternalLink className="h-4 w-4" />
+      </button>
+      {error ? <span className="text-xs font-semibold text-error">{error}</span> : null}
+    </div>
   );
 }
 

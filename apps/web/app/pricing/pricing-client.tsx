@@ -2,27 +2,37 @@
 
 import { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
-import { API_URL } from '../../lib/config';
+import { API_URL, RAZORPAY_KEY_ID } from '../../lib/config';
 
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: 'payment.failed', callback: (response: unknown) => void) => void;
+    };
   }
 }
 
 const plans = [
-  { id: 'free', title: 'Free Forever', price: '₹0', features: ['3 portal integrations', 'Google Sheets sync', 'Basic dashboard'] },
-  { id: 'monthly', title: 'Pro Monthly', price: '₹49', suffix: '/ month', popular: true, features: ['Unlimited portals', 'Priority sync', 'Email alerts', 'CSV export'] },
-  { id: 'yearly', title: 'Pro Yearly', price: '₹299', suffix: '/ year', features: ['Everything in Pro', 'Best value', 'Save 50%'] },
+  { id: 'free', title: 'Free Forever', price: '₹0', features: ['3 portal sources', 'Google Sheets sync', 'Basic dashboard'] },
+  { id: 'monthly', title: 'Pro Monthly', price: '₹49', suffix: '/ month', features: ['Unlimited sources', 'Priority sync', 'Heatmap insights', 'Manual logging'] },
+  { id: 'quarterly', title: 'Pro Quarterly', price: '₹99', suffix: '/ 3 months', features: ['Everything in monthly', 'Lower monthly cost', 'Best starter value'] },
+  { id: 'yearly', title: 'Pro Yearly', price: '₹299', suffix: '/ year', features: ['Everything in Pro', 'Best value', 'Save more'] },
 ] as const;
 
 export function PricingClient() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
 
-  async function checkout(plan: 'monthly' | 'yearly') {
+  async function checkout(plan: 'monthly' | 'quarterly' | 'yearly') {
     try {
       setLoading(plan);
-      const response = await fetch(`${API_URL}/api/payments/create-order`, {
+      setMessage('');
+      if (!RAZORPAY_KEY_ID) {
+        setMessage('Razorpay key is missing. Add NEXT_PUBLIC_RAZORPAY_KEY_ID.');
+        return;
+      }
+      const response = await fetch(`${API_URL}/api/create-order`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'include',
@@ -34,25 +44,35 @@ export function PricingClient() {
       }
       const order = await response.json();
       if (!window.Razorpay) {
-        alert('Razorpay checkout failed to load. Please try again.');
+        setMessage('Razorpay checkout failed to load. Please try again.');
         return;
       }
       const razorpay = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: RAZORPAY_KEY_ID,
         order_id: order.order_id,
         amount: order.amount,
-        currency: 'INR',
+        currency: order.currency ?? 'INR',
         name: 'JobTrackr',
         description: `${plan} plan`,
         handler: async (payment: Record<string, string>) => {
-          await fetch(`${API_URL}/api/payments/verify`, {
+          const verify = await fetch(`${API_URL}/api/verify-payment`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ ...payment, plan }),
           });
+          if (!verify.ok) {
+            setMessage('Payment verification failed. Please contact support if money was deducted.');
+            return;
+          }
           window.location.href = '/dashboard';
         },
+        modal: {
+          ondismiss: () => setMessage('Payment cancelled. You can try again anytime.'),
+        },
+      });
+      razorpay.on('payment.failed', () => {
+        setMessage('Payment failed. Please try another method or try again.');
       });
       razorpay.open();
     } finally {
@@ -61,34 +81,34 @@ export function PricingClient() {
   }
 
   return (
-    <div className="grid w-full grid-cols-1 gap-8 md:grid-cols-3">
+    <div className="space-y-4">
+    {message ? <p className="rounded-lg bg-surface-container px-4 py-3 text-sm font-semibold text-on-surface-variant">{message}</p> : null}
+    <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-4">
       {plans.map((plan) => {
-        const pro = plan.id === 'monthly';
         return (
-          <div key={plan.id} className={`shadow-ambient relative flex min-h-[410px] flex-col rounded-xl border p-8 ${pro ? 'border-primary bg-primary text-white md:-translate-y-4' : 'border-outline-variant/40 bg-white'}`}>
-            {'popular' in plan && plan.popular ? <div className="absolute -top-5 left-1/2 -translate-x-1/2 rounded-full bg-[#C9D8FF] px-5 py-1 text-sm font-bold text-on-surface-variant">Most Popular</div> : null}
-            <h2 className="font-headline text-2xl font-bold">{plan.title}</h2>
-            <div className="mt-7 flex items-end">
-              <span className="font-headline text-4xl font-extrabold">{plan.price}</span>
+          <div key={plan.id} className="relative flex min-h-[320px] flex-col rounded-lg border border-outline-variant/40 bg-white p-5 shadow-sm">
+            <h2 className="font-headline text-xl font-bold text-on-surface">{plan.title}</h2>
+            <div className="mt-5 flex items-end">
+              <span className="font-headline text-3xl font-extrabold text-on-surface">{plan.price}</span>
               {'suffix' in plan ? <span className="mb-1 ml-2 text-base opacity-80">{plan.suffix}</span> : null}
             </div>
-            <ul className="mt-8 space-y-4 text-base">
+            <ul className="mt-6 space-y-3 text-sm">
               {plan.features.map((feature) => (
-                <li className="flex items-center gap-3" key={feature}>
-                  <CheckCircle2 className={pro ? 'text-white' : 'text-primary'} /> {feature}
+                <li className="flex items-center gap-2 text-on-surface-variant" key={feature}>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> {feature}
                 </li>
               ))}
             </ul>
             <button
               onClick={() => (plan.id === 'free' ? (window.location.href = '/auth/signin') : checkout(plan.id))}
-              className={`mt-auto rounded-lg border px-6 py-4 font-bold transition-transform hover:-translate-y-0.5 active:scale-95 ${pro ? 'bg-white text-primary' : 'border-primary text-primary'}`}
+              className="mt-auto rounded-lg border border-primary px-5 py-3 text-sm font-bold text-primary transition-transform hover:-translate-y-0.5 hover:bg-primary-fixed active:scale-95"
             >
-              {loading === plan.id ? 'Opening...' : plan.id === 'free' ? 'Start Free' : plan.id === 'monthly' ? 'Get Pro' : 'Get Yearly'}
+              {loading === plan.id ? 'Opening...' : plan.id === 'free' ? 'Start Free' : plan.id === 'monthly' ? 'Get Monthly' : plan.id === 'quarterly' ? 'Get Quarterly' : 'Get Yearly'}
             </button>
-            {pro ? <div className="mt-4 text-center text-base text-[#C9D8FF]">₹99 / 3 months</div> : null}
           </div>
         );
       })}
+    </div>
     </div>
   );
 }

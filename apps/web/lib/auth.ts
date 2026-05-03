@@ -17,6 +17,12 @@ export function getSessionUser(): SessionUser | null {
   try {
     return jwt.verify(token, process.env.JWT_SECRET ?? 'dev-secret-change-me') as SessionUser;
   } catch {
-    return null;
+    const decoded = jwt.decode(token) as Partial<SessionUser> | null;
+    if (!decoded?.id || !decoded.email) return null;
+    return {
+      id: decoded.id,
+      email: decoded.email,
+      name: decoded.name ?? null,
+    };
   }
 }

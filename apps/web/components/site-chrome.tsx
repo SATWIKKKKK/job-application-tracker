@@ -1,14 +1,17 @@
 import Link from 'next/link';
 import clsx from 'clsx';
+import { getSessionUser } from '../lib/auth';
+import { MarketingAuthActions } from './marketing-auth-actions';
 
 const links = [
   ['Features', '/features'],
   ['Pricing', '/pricing'],
   ['How it Works', '/how-it-works'],
-  ['Sites', '/sites'],
 ] as const;
 
 export function NavBar({ active }: { active?: string }) {
+  const user = getSessionUser();
+
   return (
     <nav className="fixed top-0 z-50 w-full bg-white/70 shadow-[0_4px_20px_rgba(0,73,197,0.04)] backdrop-blur-xl">
       <div className="mx-auto flex h-[72px] max-w-screen-2xl items-center justify-between px-6 md:px-8">
@@ -29,17 +32,7 @@ export function NavBar({ active }: { active?: string }) {
             </Link>
           ))}
         </div>
-        <div className="flex items-center gap-3 md:gap-4">
-          <Link href="/auth/signin" className="font-body text-sm font-medium text-primary hover:text-primary-container">
-            Login
-          </Link>
-          <Link
-            href="/auth/signin"
-            className="hero-gradient rounded-full px-5 py-3 font-body text-sm font-bold text-white shadow-[0_4px_20px_rgba(0,73,197,0.15)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_40px_rgba(0,73,197,0.25)] active:scale-95 md:px-7"
-          >
-            Get Started
-          </Link>
-        </div>
+        <MarketingAuthActions user={user} />
       </div>
     </nav>
   );
