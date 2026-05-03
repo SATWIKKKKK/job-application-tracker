@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { CheckCircle2, ExternalLink, Loader2, MailCheck } from 'lucide-react';
 import type { User } from '../lib/types';
 import { API_URL } from '../lib/config';
@@ -22,7 +21,6 @@ function getBrowserAuthHeaders() {
 }
 
 export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User; oauthJustCompleted: boolean }) {
-  const router = useRouter();
   const [gmailConnected, setGmailConnected] = useState(user.gmail_connected);
   const [sheetId, setSheetId] = useState(user.google_sheet_id);
   const [scanCompleted, setScanCompleted] = useState(user.initial_scan_completed);
@@ -51,20 +49,6 @@ export function DashboardConnectionUX({ user, oauthJustCompleted }: { user: User
     }, 3000);
     return () => window.clearInterval(timer);
   }, [isScanning, scanCompleted]);
-
-  useEffect(() => {
-    if (!gmailConnected) return;
-    const timer = window.setInterval(() => {
-      void fetch(`${API_URL}/api/gmail/sync-recent`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
-      }).finally(() => {
-        router.refresh();
-      });
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [gmailConnected, router]);
 
   const banner = useMemo(() => {
     if (!gmailConnected) {

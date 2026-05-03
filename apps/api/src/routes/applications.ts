@@ -152,6 +152,7 @@ applicationsRouter.get('/', async (req, res, next) => {
     const pageSize = Math.min(Math.max(Number(req.query.page_size ?? 20), 1), 100);
     const offset = (page - 1) * pageSize;
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const date = typeof req.query.date === 'string' ? req.query.date.trim() : '';
     const search = `%${q}%`;
     const total = await query<{ count: string }>(
       `select count(*)
@@ -159,22 +160,28 @@ applicationsRouter.get('/', async (req, res, next) => {
        where user_id = $1
          and (
            $2 = ''
-           or job_title ilike $3
            or company ilike $3
+         )
+         and (
+           $4 = ''
+           or date(applied_at) = $4::date
          )`,
-      [req.user!.id, q, search],
+      [req.user!.id, q, search, date],
     );
     const apps = await query<JobApplication>(
       `select * from applications
        where user_id = $1
          and (
            $2 = ''
-           or job_title ilike $3
            or company ilike $3
+         )
+         and (
+           $6 = ''
+           or date(applied_at) = $6::date
          )
        order by applied_at desc
        limit $4 offset $5`,
-      [req.user!.id, q, search, pageSize, offset],
+      [req.user!.id, q, search, pageSize, offset, date],
     );
     const filtered = apps.rows.filter((app) => !isPromotionalJobText(app.job_title) && !isPromotionalJobText(app.raw_text));
 
@@ -184,6 +191,7 @@ applicationsRouter.get('/', async (req, res, next) => {
       page_size: pageSize,
       total: Number(total.rows[0].count),
       q,
+      date,
     });
   } catch (error) {
     next(error);
@@ -219,14 +227,15 @@ applicationsRouter.get('/stats', async (req, res, next) => {
 
 applicationsRouter.get('/heatmap', async (req, res, next) => {
   try {
+    const days = Math.min(Math.max(Number(req.query.days ?? 84), 15), 120);
     const rows = await query<{ date: string; count: string }>(
       `select to_char(date(applied_at), 'YYYY-MM-DD') as date, count(*)::text as count
        from applications
        where user_id = $1
-         and applied_at >= (current_date - interval '83 days')
+         and applied_at >= (current_date - ($2::int - 1) * interval '1 day')
        group by date(applied_at)
        order by date(applied_at) asc`,
-      [req.user!.id],
+      [req.user!.id, days],
     );
 
     res.json(

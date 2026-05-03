@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Manrope } from 'next/font/google';
+import { GsapProvider } from '../components/gsap-provider';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${manrope.variable} font-body antialiased`}>
-        {children}
+        <GsapProvider>
+          <div data-page-transition>{children}</div>
+        </GsapProvider>
       </body>
     </html>
   );

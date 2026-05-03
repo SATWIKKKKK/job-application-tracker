@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AuthBridgePage() {
+function AuthBridgeContent() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -18,4 +19,12 @@ export default function AuthBridgePage() {
   }, [params, router]);
 
   return null;
+}
+
+export default function AuthBridgePage() {
+  return (
+    <Suspense fallback={null}>
+      <AuthBridgeContent />
+    </Suspense>
+  );
 }

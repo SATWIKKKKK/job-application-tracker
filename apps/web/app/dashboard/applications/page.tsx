@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, TableProperties } from 'lucide-react';
 import type { JobApplication, User } from '../../../lib/types';
 import { ApplicationsPageClient } from '../../../components/applications-page-client';
+import { DashboardLoadingGate } from '../../../components/dashboard-loading-gate';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { apiFetch } from '../../../lib/api';
 
@@ -35,6 +36,7 @@ export default async function ApplicationsPage({
 
   return (
     <DashboardShell user={user}>
+      <DashboardLoadingGate label="Loading applications">
       <section className="space-y-4">
         <Link
           href="/dashboard"
@@ -59,6 +61,7 @@ export default async function ApplicationsPage({
         total={list.total}
         initialQuery={q}
       />
+      </DashboardLoadingGate>
     </DashboardShell>
   );
 }

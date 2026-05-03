@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import type { ApplicationStatus, JobApplication } from '../lib/types';
 import { API_URL } from '../lib/config';
 import { SUPPORTED_PORTALS } from '../lib/portals';
+import { ApplicationsResultsTable } from './applications-results-table';
 
 const statusClass: Record<string, string> = {
   Applied: 'bg-[#E3F2FD] text-[#1565C0]',
@@ -69,17 +70,9 @@ export function ApplicationsPageClient({
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      void fetch(`${API_URL}/api/gmail/sync-recent`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: getBrowserAuthHeaders(),
-      }).finally(() => {
-        router.refresh();
-      });
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [router]);
+    setRows(initialRows);
+    setSearchQuery(initialQuery);
+  }, [initialRows, initialQuery]);
 
   async function updateStatus(app: JobApplication, status: ApplicationStatus) {
     setRows((current) => current.map((item) => (item.id === app.id ? { ...item, status } : item)));
@@ -158,66 +151,41 @@ export function ApplicationsPageClient({
     <div className="space-y-5">
       <section className="shadow-ambient overflow-hidden rounded-lg border border-outline-variant/30 bg-surface-container-lowest">
         <div className="flex flex-col gap-3 border-b border-outline-variant/20 p-5 md:flex-row md:items-center md:justify-between">
-          <form onSubmit={onSearchSubmit} className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
-            <input
-              className="manual-input pl-10"
-              placeholder="Search by company or job title"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+          <form onSubmit={onSearchSubmit} className="flex w-full max-w-2xl flex-col gap-3 sm:flex-row">
+            <label className="relative block min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
+              <input
+                className="h-11 w-full rounded-lg border border-outline-variant/40 bg-white py-2.5 pl-12 pr-3 text-sm text-on-surface shadow-sm outline-none transition-colors placeholder:text-on-surface-variant focus:border-primary focus:ring-2 focus:ring-primary-fixed"
+                placeholder="Search by company name"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-bold text-on-primary shadow-sm transition-colors hover:bg-blue-800"
+            >
+              <Search className="h-4 w-4" /> Search
+            </button>
           </form>
           <p className="text-sm font-semibold text-on-surface-variant">{total.toLocaleString()} records</p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px]">
-            <thead className="bg-surface-container-low text-left text-xs uppercase tracking-wide text-on-surface-variant">
-              <tr>
-                <th className="px-5 py-3">Job Title</th>
-                <th className="px-5 py-3">Company</th>
-                <th className="px-5 py-3">Role Type</th>
-                <th className="px-5 py-3">Portal</th>
-                <th className="px-5 py-3">Applied Date</th>
-                <th className="px-5 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
-              {rows.length ? (
-                rows.map((app) => (
-                  <tr key={app.id} className="border-t border-outline-variant/20">
-                    <td className="px-5 py-4 font-medium text-on-surface">{app.job_title}</td>
-                    <td className="px-5 py-4">{app.company}</td>
-                    <td className="px-5 py-4">{app.role_type}</td>
-                    <td className="px-5 py-4">
-                      <span className="rounded-full bg-surface-container px-3 py-1 font-semibold">
-                        {app.portal}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">{new Date(app.applied_at).toLocaleDateString()}</td>
-                    <td className="px-5 py-4">
-                      <select
-                        className={`rounded-full border-0 px-3 py-1 text-sm font-bold ${statusClass[app.status]}`}
-                        value={app.status}
-                        onChange={(event) => updateStatus(app, event.target.value as ApplicationStatus)}
-                      >
-                        {statuses.map((status) => (
-                          <option key={status}>{status}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="px-5 py-8 text-center text-on-surface-variant" colSpan={6}>
-                    No applications found for this filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ApplicationsResultsTable
+          rows={rows}
+          emptyText="No applications found for this filter."
+          renderStatus={(app) => (
+            <select
+              className={`rounded-full border-0 px-3 py-1 text-sm font-bold ${statusClass[app.status]}`}
+              value={app.status}
+              onChange={(event) => updateStatus(app, event.target.value as ApplicationStatus)}
+            >
+              {statuses.map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          )}
+        />
 
         <div className="flex items-center justify-between border-t border-outline-variant/20 p-4 text-sm">
           <span className="font-semibold text-on-surface-variant">
