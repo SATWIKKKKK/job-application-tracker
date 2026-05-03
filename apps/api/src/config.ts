@@ -59,7 +59,7 @@ export const config = {
     process.env.GOOGLE_PUBSUB_TOPIC_NAME ??
     (process.env.GOOGLE_CLOUD_PROJECT
       ? `projects/${process.env.GOOGLE_CLOUD_PROJECT}/topics/jobtrackr-gmail-watch`
-      : 'projects/jobtrackr/topics/jobtrackr-gmail-watch'),
+      : 'projects/jobtrackr-494916/topics/jobtrackr-gmail-watch'),
   aiCreditsApiKey: process.env.AICREDITS_API_KEY ?? '',
   aiCreditsBaseUrl: process.env.AICREDITS_BASE_URL ?? 'https://api.aicredits.in/v1',
   aiCreditsModel: process.env.AICREDITS_MODEL ?? 'deepseek/deepseek-v3',
