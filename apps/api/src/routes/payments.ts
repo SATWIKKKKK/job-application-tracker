@@ -50,11 +50,13 @@ function logRazorpayError(error: unknown) {
     };
   };
 
-  console.error('Razorpay order creation failed', {
+  const snapshot = {
     message: details?.message,
     statusCode: details?.statusCode,
     razorpay: details?.error,
-  });
+  };
+
+  console.error(`Razorpay order creation failed ${JSON.stringify(snapshot)}`);
 }
 
 async function createOrder(req: Request, res: Response, next: NextFunction) {
