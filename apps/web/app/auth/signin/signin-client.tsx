@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { API_URL } from '../../../lib/config';
 import { getOAuthReturnTo } from '../../../lib/oauth';
 
@@ -14,7 +15,16 @@ function persistWebToken(token?: string) {
   document.cookie = `jt_token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
 }
 
+function getSafeNextPath(nextPath: string | null | undefined, fallback = '/dashboard') {
+  if (nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')) {
+    return nextPath;
+  }
+  return fallback;
+}
+
 export function AuthPanel() {
+  const searchParams = useSearchParams();
+  const nextPath = getSafeNextPath(searchParams.get('next'));
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -61,7 +71,9 @@ export function AuthPanel() {
     if (mode === 'login') {
       const data = await submit('/api/auth/login', { email, password });
       persistWebToken(data?.token);
-      if (data?.redirect_to) window.location.href = data.redirect_to;
+      if (data?.token) {
+        window.location.href = nextPath;
+      }
       return;
     }
     if (mode === 'signup') {
@@ -74,7 +86,9 @@ export function AuthPanel() {
     }
     const data = await submit('/api/auth/verify-otp', { email, otp });
     persistWebToken(data?.token);
-    if (data?.redirect_to) window.location.href = data.redirect_to;
+    if (data?.token) {
+      window.location.href = nextPath;
+    }
   }
 
   return (
@@ -156,9 +170,13 @@ export function AuthPanel() {
 
         {message ? <p className="mt-4 rounded-lg bg-surface-container-low px-4 py-3 text-center text-sm text-on-surface-variant">{message}</p> : null}
 
-        <a href={getGoogleAuthUrl()} className="mt-5 flex w-full items-center justify-center gap-3 rounded-full border border-outline-variant/40 bg-white px-6 py-4 font-bold text-on-surface shadow-sm transition-colors hover:bg-surface-container-low">
+        <a href={getGoogleAuthUrl(nextPath)} className="mt-5 flex w-full items-center justify-center gap-3 rounded-full border border-outline-variant/40 bg-white px-6 py-4 font-bold text-on-surface shadow-sm transition-colors hover:bg-surface-container-low">
           <GoogleIcon /> Continue with Google
         </a>
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface-container-low px-4 py-3 text-xs leading-5 text-on-surface-variant">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span>You may see a Google security warning. Click Continue to proceed. We only read job confirmation emails, never personal emails.</span>
+        </p>
       </div>
     </>
   );
@@ -174,7 +192,7 @@ function GoogleIcon() {
     </svg>
   );
 }
-  function getGoogleAuthUrl() {
+  function getGoogleAuthUrl(nextPath: string) {
     const returnTo = getOAuthReturnTo();
-    return `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
+    return `${API_URL}/api/auth/google?return_to=${encodeURIComponent(returnTo)}&next=${encodeURIComponent(nextPath)}`;
   }

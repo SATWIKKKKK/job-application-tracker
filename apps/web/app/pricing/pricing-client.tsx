@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { API_URL, RAZORPAY_KEY_ID } from '../../lib/config';
 import type { SessionUser } from '../../lib/auth';
@@ -15,23 +15,48 @@ declare global {
   }
 }
 
+type PaidPlan = 'monthly' | 'quarterly' | 'yearly';
+type PlanId = 'free' | PaidPlan;
+
+function getBrowserAuthHeaders() {
+  const token = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith('jt_token='))
+    ?.split('=')[1];
+  return token ? { authorization: `Bearer ${decodeURIComponent(token)}` } : undefined;
+}
+
 const plans = [
   { id: 'free', title: 'Free Forever', price: '₹0', features: ['3 portal sources', 'Google Sheets sync', 'Basic dashboard'] },
-  { id: 'monthly', title: 'Pro Monthly', price: '₹49', suffix: '/ month', features: ['Unlimited sources', 'Priority sync', 'Heatmap insights', 'Manual logging'] },
+  { id: 'monthly', title: 'Pro Monthly', price: '₹1', suffix: '/ month', features: ['Unlimited sources', 'Priority sync', 'Heatmap insights', 'Manual logging'] },
   { id: 'quarterly', title: 'Pro Quarterly', price: '₹99', suffix: '/ 3 months', features: ['Everything in monthly', 'Lower monthly cost', 'Best starter value'] },
   { id: 'yearly', title: 'Pro Yearly', price: '₹299', suffix: '/ year', features: ['Everything in Pro', 'Best value', 'Save more'] },
 ] as const;
 
-export function PricingClient({ user, reason }: { user: SessionUser | null; reason?: string }) {
+function isCurrentPlan(planId: PlanId, currentPlan: ReturnType<typeof usePlan>['plan']) {
+  if (planId === 'free') return currentPlan.plan === 'free';
+  return currentPlan.plan === 'pro' && currentPlan.plan_type === planId;
+}
+
+export function PricingClient({
+  user,
+  reason,
+  checkoutPlan,
+}: {
+  user: SessionUser | null;
+  reason?: string;
+  checkoutPlan?: PaidPlan | null;
+}) {
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState(
     reason === 'upgrade_required' ? 'Upgrade to Pro to access that dashboard feature.' : '',
   );
-  const [freeModal, setFreeModal] = useState(false);
-  const [successPlan, setSuccessPlan] = useState<'monthly' | 'quarterly' | 'yearly' | null>(null);
+  const [currentPlanModal, setCurrentPlanModal] = useState<PlanId | null>(null);
+  const [successPlan, setSuccessPlan] = useState<PaidPlan | null>(null);
   const { plan: currentPlan, refreshPlan } = usePlan();
+  const startedCheckoutRef = useRef(false);
 
-  async function checkout(plan: 'monthly' | 'quarterly' | 'yearly') {
+  const checkout = useCallback(async (plan: PaidPlan) => {
     try {
       setLoading(plan);
       setMessage('');
@@ -39,14 +64,27 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
         setMessage('Razorpay key is missing. Add NEXT_PUBLIC_RAZORPAY_KEY_ID.');
         return;
       }
+      const authHeaders = getBrowserAuthHeaders();
       const response = await fetch(`${API_URL}/api/payments/create-order`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(authHeaders ?? {}),
+        },
         credentials: 'include',
         body: JSON.stringify({ plan }),
       });
       if (!response.ok) {
-        window.location.href = '/auth/signin';
+        if (response.status === 401 || response.status === 403) {
+          const nextPath = `/pricing?checkout=${plan}`;
+          window.location.href = `/auth/signin?next=${encodeURIComponent(nextPath)}`;
+          return;
+        }
+        if (response.status === 409) {
+          setCurrentPlanModal(plan);
+          return;
+        }
+        setMessage('Unable to start Razorpay checkout right now. Please try again.');
         return;
       }
       const order = await response.json();
@@ -69,7 +107,10 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
         handler: async (payment: Record<string, string>) => {
           const verify = await fetch(`${API_URL}/api/payments/verify`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: {
+              'content-type': 'application/json',
+              ...(authHeaders ?? {}),
+            },
             credentials: 'include',
             body: JSON.stringify({ ...payment, plan }),
           });
@@ -94,13 +135,21 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
     } finally {
       setLoading(null);
     }
-  }
+  }, [refreshPlan, user]);
+
+  useEffect(() => {
+    if (!checkoutPlan || !user || startedCheckoutRef.current) return;
+    if (isCurrentPlan(checkoutPlan, currentPlan)) return;
+    startedCheckoutRef.current = true;
+    void checkout(checkoutPlan);
+  }, [checkout, checkoutPlan, currentPlan, user]);
 
   return (
     <div className="space-y-4">
     {message ? <p className="rounded-lg bg-surface-container px-4 py-3 text-sm font-semibold text-on-surface-variant">{message}</p> : null}
     <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-4">
       {plans.map((plan) => {
+        const activePlan = isCurrentPlan(plan.id, currentPlan);
         return (
           <div
             key={plan.id}
@@ -108,6 +157,11 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
             className="relative flex min-h-[320px] flex-col rounded-lg border border-outline-variant/40 bg-white p-5 shadow-sm"
           >
             <h2 className="font-headline text-xl font-bold text-on-surface">{plan.title}</h2>
+            {activePlan ? (
+              <p className="mt-2 flex items-center gap-2 text-sm font-bold text-green-700">
+                <CheckCircle2 className="h-4 w-4" /> You are already on this plan
+              </p>
+            ) : null}
             <div className="mt-5 flex items-end">
               <span className="font-headline text-3xl font-extrabold text-on-surface">{plan.price}</span>
               {'suffix' in plan ? <span className="mb-1 ml-2 text-base opacity-80">{plan.suffix}</span> : null}
@@ -121,11 +175,11 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
             </ul>
             <button
               onClick={() => {
+                if (activePlan) {
+                  setCurrentPlanModal(plan.id);
+                  return;
+                }
                 if (plan.id === 'free') {
-                  if (user && currentPlan.plan === 'free') {
-                    setFreeModal(true);
-                    return;
-                  }
                   window.location.href = '/auth/signin';
                   return;
                 }
@@ -133,33 +187,49 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
               }}
               className="mt-auto rounded-lg border border-primary px-5 py-3 text-sm font-bold text-primary transition-transform hover:-translate-y-0.5 hover:bg-primary-fixed active:scale-95"
             >
-              {loading === plan.id ? 'Opening...' : plan.id === 'free' ? 'Start Free' : plan.id === 'monthly' ? 'Get Monthly' : plan.id === 'quarterly' ? 'Get Quarterly' : 'Get Yearly'}
+              {loading === plan.id
+                ? 'Opening...'
+                : activePlan
+                  ? 'Current Plan'
+                  : plan.id === 'free'
+                    ? 'Start Free'
+                    : plan.id === 'monthly'
+                      ? 'Get Monthly'
+                      : plan.id === 'quarterly'
+                        ? 'Get Quarterly'
+                        : 'Get Yearly'}
             </button>
           </div>
         );
       })}
     </div>
-    {freeModal ? (
+    {currentPlanModal ? (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 p-4 backdrop-blur-sm">
         <div className="shadow-ambient w-full max-w-md rounded-lg bg-surface-container-lowest p-6">
-          <h2 className="font-headline text-2xl font-bold text-on-surface">You are already on the Free Plan</h2>
+          <h2 className="font-headline text-2xl font-bold text-on-surface">
+            {currentPlanModal === 'free' ? 'You are already on the Free Plan' : `You are already on Pro ${currentPlanModal === 'monthly' ? 'Monthly' : currentPlanModal === 'quarterly' ? 'Quarterly' : 'Yearly'}`}
+          </h2>
           <p className="mt-3 text-sm leading-6 text-on-surface-variant">
-            You currently have access to 3 portal sources, Google Sheets sync, and basic dashboard. Upgrade to Pro for unlimited portals, heatmap insights, and manual logging.
+            {currentPlanModal === 'free'
+              ? 'You currently have access to 3 portal sources, Google Sheets sync, and basic dashboard. Upgrade to Pro for unlimited portals, heatmap insights, and manual logging.'
+              : 'This plan is already active on your account.'}
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button type="button" onClick={() => setFreeModal(false)} className="rounded-full bg-surface-container px-5 py-3 text-sm font-bold text-on-surface">
+            <button type="button" onClick={() => setCurrentPlanModal(null)} className="rounded-full bg-surface-container px-5 py-3 text-sm font-bold text-on-surface">
               Got it
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFreeModal(false);
-                document.getElementById('monthly-plan-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }}
-              className="hero-gradient rounded-full px-5 py-3 text-sm font-bold text-on-primary"
-            >
-              Upgrade to Pro
-            </button>
+            {currentPlanModal === 'free' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPlanModal(null);
+                  document.getElementById('monthly-plan-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                className="hero-gradient rounded-full px-5 py-3 text-sm font-bold text-on-primary"
+              >
+                Upgrade to Pro
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -172,7 +242,7 @@ export function PricingClient({ user, reason }: { user: SessionUser | null; reas
   );
 }
 
-function UpgradeSuccessModal({ plan, onClose }: { plan: 'monthly' | 'quarterly' | 'yearly'; onClose: () => void }) {
+function UpgradeSuccessModal({ plan, onClose }: { plan: PaidPlan; onClose: () => void }) {
   const label = plan === 'monthly' ? 'Monthly' : plan === 'quarterly' ? 'Quarterly' : 'Yearly';
   const features = [
     'Unlimited portal sync',

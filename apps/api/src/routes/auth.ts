@@ -40,6 +40,12 @@ function resolveReturnOrigin(candidates: Array<string | null | undefined>) {
   return parseOrigin(config.webUrl) ?? 'http://localhost:3001';
 }
 
+function resolveNextPath(value: unknown, fallback = '/dashboard?oauth=google') {
+  if (typeof value !== 'string') return fallback;
+  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
+  return value;
+}
+
 function setAuthCookie(res: Response, user: AuthUser) {
   const token = signAppJwt(user);
   res.cookie('jt_token', token, cookieOptions);
@@ -49,11 +55,13 @@ function setAuthCookie(res: Response, user: AuthUser) {
 authRouter.get('/google', (_req, res) => {
   const req = _req;
   const returnToQuery = typeof req.query.return_to === 'string' ? req.query.return_to : null;
+  const nextQuery = typeof req.query.next === 'string' ? req.query.next : null;
   const originHeader = req.get('origin');
   const refererOrigin = originFromReferer(req.get('referer'));
   const safeReturnTo = resolveReturnOrigin([originHeader, refererOrigin, returnToQuery, config.webUrl]);
+  const safeNextPath = resolveNextPath(nextQuery);
   res.cookie(oauthReturnCookie, safeReturnTo, oauthReturnCookieOptions);
-  const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo }), 'utf8').toString('base64url');
+  const state = Buffer.from(JSON.stringify({ return_to: safeReturnTo, next: safeNextPath }), 'utf8').toString('base64url');
   res.redirect(getGoogleAuthUrl(state));
 });
 
@@ -142,11 +150,24 @@ authRouter.get('/google/callback', async (req, res, next) => {
       }
     })();
 
+    const redirectNextPath = (() => {
+      const state = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!state) return '/dashboard?oauth=google';
+      try {
+        const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
+          next?: string;
+        };
+        return resolveNextPath(parsed.next);
+      } catch {
+        return '/dashboard?oauth=google';
+      }
+    })();
+
     const token = setAuthCookie(res, appUser);
     res.clearCookie(oauthReturnCookie);
     const bridgeUrl = new URL('/auth/bridge', redirectBaseUrl);
     bridgeUrl.searchParams.set('token', token);
-    bridgeUrl.searchParams.set('next', '/dashboard?oauth=google');
+    bridgeUrl.searchParams.set('next', redirectNextPath);
     res.redirect(bridgeUrl.toString());
   } catch (error) {
     next(error);

@@ -233,6 +233,22 @@ applicationsRouter.get('/stats', async (req, res, next) => {
   }
 });
 
+applicationsRouter.get('/portals', async (req, res, next) => {
+  try {
+    const portals = await query<{ portal: string }>(
+      `select distinct portal
+       from applications
+       where user_id = $1
+       order by portal asc`,
+      [req.user!.id],
+    );
+
+    return res.json({ portals: portals.rows.map((row) => row.portal) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 applicationsRouter.get('/heatmap', async (req, res, next) => {
   try {
     const userPlan = await query<{ plan: string }>('select plan from users where id = $1', [req.user!.id]);

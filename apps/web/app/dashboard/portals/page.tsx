@@ -8,11 +8,11 @@ import { SUPPORTED_PORTALS } from '../../../lib/portals';
 export const dynamic = 'force-dynamic';
 
 export default async function PortalsPage() {
-  const [{ user }, apps] = await Promise.all([
+  const [{ user }, portalState] = await Promise.all([
     apiFetch<{ user: User }>('/api/me'),
-    apiFetch<{ data: JobApplication[] }>('/api/applications?page_size=100'),
+    apiFetch<{ portals: string[] }>('/api/applications/portals'),
   ]);
-  const used = new Set(apps.data.map((app) => app.portal));
+  const used = new Set(portalState.portals);
 
   return (
     <DashboardShell user={user}>

@@ -22,6 +22,11 @@ export default async function ApplicationsPage({
 }: {
   searchParams?: { page?: string; q?: string };
 }) {
+  const { user } = await apiFetch<{ user: User }>('/api/me');
+  if (user.plan === 'free') {
+    redirect('/pricing?reason=upgrade_required');
+  }
+
   const currentPage = Math.max(Number(searchParams?.page ?? '1') || 1, 1);
   const q = (searchParams?.q ?? '').trim();
   const query = new URLSearchParams({
@@ -30,14 +35,7 @@ export default async function ApplicationsPage({
   });
   if (q) query.set('q', q);
 
-  const [{ user }, list] = await Promise.all([
-    apiFetch<{ user: User }>('/api/me'),
-    apiFetch<ApplicationsResponse>(`/api/applications?${query.toString()}`),
-  ]);
-
-  if (user.plan === 'free') {
-    redirect('/pricing?reason=upgrade_required');
-  }
+  const list = await apiFetch<ApplicationsResponse>(`/api/applications?${query.toString()}`);
 
   return (
     <DashboardShell user={user}>
